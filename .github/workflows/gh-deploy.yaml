@@ -1,0 +1,30 @@
+# REF: Inspired from:
+# https://dev.to/achukka/deploy-react-app-using-github-actions-157d
+# https://github.com/jlumbroso/hugo-geekdoc-github-example/blob/47d86ed41e1678c13b17c44a71140563c8882f3c/.github/workflows/gh-pages.yaml
+
+name: Deploy to GitHub Pages
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Check-out the content of the repository"
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: "Install Node.js"
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+      - name: "Install dependencies, then build output JS bundle"
+        run: |
+          npm install
+          npm run build --if-present
+          cp -pR ./dist ./public
+      - name: Deploy to 'gh-pages' branch
+        id: deploy-with-token
+        uses: peaceiris/actions-gh-pages@373f7f263a76c20808c831209c920827a82a2847 # v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./public
