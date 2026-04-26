@@ -1,20 +1,15 @@
 import * as ynab from "ynab";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import config from "../config.json";
+import { CategorySelect } from "./CategorySelect";
+import { AccountSelect } from "./AccountSelect";
 
 export function Import() {
-  interface Category {
-    id: string;
-    name: string;
-    group_id: string;
-    group_name: string;
-  }
-
   function setUpYnabApi() {
     let token = null;
     const search =
-      window.location.hash.
-        substring(1).replace(/&/g, '","').replace(/=/g, '":"');
+      window.location.hash
+        .substring(1).replace(/&/g, '","').replace(/=/g, '":"');
 
     if (search && search !== '') {
       // Try to get access_token from the hash returned by OAuth
@@ -35,6 +30,7 @@ export function Import() {
     }
 
     return new ynab.api(token);
+
   }
 
   function moneyToMilliunits(money: string): number {
@@ -45,45 +41,7 @@ export function Import() {
   const [ynabApi, _] = useState(() => setUpYnabApi());
   const [transactions, setTransactions] = useState("");
   const [settlingUpCategoryId, setSettlingUpCategoryId] = useState("");
-  const [categories, setCategories] = useState([] as Category[]);
-
-  async function getCategories(ynabApi: ynab.api): Promise<Category[]> {
-    const categoriesResponse = await ynabApi.categories.getCategories("default");
-    return categoriesResponse.data.category_groups
-      .filter(group => !group.deleted && !group.hidden)
-      .flatMap(group => {
-        return group.categories
-          .filter(category =>
-            !category.deleted &&
-            !category.hidden &&
-            category.name.toLowerCase().includes("settling up"))
-          .map(function (category): Category {
-            return {
-              id: category.id,
-              name: category.name,
-              group_id: group.id,
-              group_name: group.name,
-            };
-          });
-      });
-  }
-
-  useEffect(() => {
-    let ignore = false;
-
-    setCategories([]);
-
-    getCategories(ynabApi).then(result => {
-      if (!ignore) {
-        setCategories(result);
-        setSettlingUpCategoryId(result[0].id);
-      }
-    });
-
-    return () => {
-      ignore = true;
-    }
-  }, [ynabApi]);
+  const [accountId, setAccountId] = useState("");
 
   function handleTextareaChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setTransactions(e.target.value);
@@ -92,7 +50,7 @@ export function Import() {
   function createTransactions(e: React.SubmitEvent) {
     e.preventDefault();
 
-    if (!transactions) {
+    if (!transactions || !settlingUpCategoryId || !accountId) {
       return;
     }
 
@@ -104,22 +62,28 @@ export function Import() {
     const newTransactions: ynab.NewTransaction[] =
       stringSplitTransactions
         .map(function (array) {
-          const totalAmount = moneyToMilliunits(array[13]);
-          const rightAmount = moneyToMilliunits(array[15]);
+          const totalAmount = moneyToMilliunits(array[2]);
+          const amountToSettleLater = moneyToMilliunits(array[12]);
 
-          if (!totalAmount || !rightAmount) return null;
+          if (!totalAmount || !amountToSettleLater) return null;
 
-          const leftAmount: number = totalAmount - rightAmount;
+          const myShareAmount = totalAmount - amountToSettleLater;
+
+          if (!myShareAmount) {
+            // nothing to split
+            return;
+          }
 
           const transaction: ynab.NewTransaction = {
             date: new Date(array[0]).toISOString().substring(0, 10),
-            amount: moneyToMilliunits(array[13]),
+            amount: totalAmount,
+            account_id: accountId,
             subtransactions: [
               {
-                amount: leftAmount
+                amount: myShareAmount
               },
               {
-                amount: rightAmount,
+                amount: amountToSettleLater,
                 category_id: settlingUpCategoryId
               }
             ]
@@ -139,17 +103,21 @@ export function Import() {
   }
 
   return (
-    <main className="pt-16 pb-4 w-full flex items-center justify-center">
+    <main className="pt-16 pb-4 w-full flex flex-col items-center justify-center">
       <form className="flex flex-wrap items-center justify-center w-2/3 gap-y-20" onSubmit={createTransactions}>
-        <select
+        <CategorySelect
+          ynabApi={ynabApi}
           name="settlingUpCategoryId"
-          value={settlingUpCategoryId}
-          onChange={e => setSettlingUpCategoryId(e.target.value)}
-          className="bg-white text-black">
-          {categories.map((category) =>
-            <option key={category.id} value={category.id}>{category.group_name} - {category.name}</option>
-          )}
-        </select>
+          selectedCategoryId={settlingUpCategoryId}
+          onChange={(e) => setSettlingUpCategoryId(e.target.value)}
+          className="m-auto bg-white text-black" />
+
+        <AccountSelect
+          ynabApi={ynabApi}
+          name="accountId"
+          selectedAccountId={accountId}
+          onChange={(e) => setAccountId(e.target.value)}
+          className="m-auto bg-white text-black" />
 
         <textarea
           name="transactions"
