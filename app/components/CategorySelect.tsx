@@ -1,26 +1,25 @@
-import * as ynab from "ynab";
 import { useEffect, useState, type ChangeEventHandler } from "react";
+import { useYnab } from "~/hooks/ynab";
 
 export function CategorySelect({
-  ynabApi,
   name,
   className,
   selectedCategoryId,
   onChange
 }: {
-  ynabApi: ynab.api,
   name?: string,
   className?: string,
   selectedCategoryId?: string,
   onChange?: ChangeEventHandler<HTMLSelectElement>
 }) {
-
   interface Category {
     id: string;
     name: string;
     group_id: string;
     group_name: string;
   }
+
+  const ynabApi = useYnab();
 
   const [categories, setCategories] = useState([] as Category[]);
 

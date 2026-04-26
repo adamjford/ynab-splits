@@ -1,19 +1,18 @@
-import * as ynab from "ynab";
 import { useEffect, useState, type ChangeEventHandler } from "react";
+import { useYnab } from "../hooks/ynab";
 
 export function AccountSelect({
-  ynabApi,
   name,
   className,
   selectedAccountId,
   onChange
 }: {
-  ynabApi: ynab.api,
   name?: string,
   className?: string,
   selectedAccountId?: string,
   onChange?: ChangeEventHandler<HTMLSelectElement>
 }) {
+  const ynabApi = useYnab();
 
   interface Account {
     id: string;
