@@ -5,19 +5,11 @@ import { useYnabFetchEffect } from "~/hooks/ynab/useYnabFetchEffect";
 import { utils, type api as YnabApi } from "ynab";
 import { useImmer } from "use-immer";
 import { Wizard, useWizard } from 'react-use-wizard';
-import { useNumberFormat } from "~/context/numberFormatContext";
 
 export function TransactionSplitter() {
-  const numberFormat = useNumberFormat();
-
-  function fmt(value: number): string {
-    return numberFormat.format(
-      utils.convertMilliUnitsToCurrencyAmount(value)
-    )
-  }
-
   const [accountId, setAccountId] = useState("");
   const [settlingUpCategoryId, setSettlingUpCategoryId] = useState("");
+  const [isUnapprovedTransactionsLoading, setIsUnapprovedTransactionsLoading] = useState(true);
   const [unapprovedTransactions, setUnapprovedTransactions] = useImmer([] as UnapprovedTransaction[]);
 
   async function getTransactions(ynabApi: YnabApi): Promise<UnapprovedTransaction[]> {
@@ -39,6 +31,7 @@ export function TransactionSplitter() {
   useYnabFetchEffect(
     getTransactions,
     setUnapprovedTransactions,
+    setIsUnapprovedTransactionsLoading,
     [accountId]
   )
 
@@ -93,6 +86,43 @@ export function TransactionSplitter() {
     );
   }
 
+  function SplitterWizard() {
+    if (!accountId) {
+      return null;
+    }
+
+    if (isUnapprovedTransactionsLoading) {
+      return <span>Loading...</span>
+    }
+
+    if (!unapprovedTransactions.length) {
+      return <span>No unapproved transactions found for the selected account.</span>
+    }
+
+    return (
+      <Wizard
+        header={<WizardHeader />}
+        wrapper={<div className="flex justify-evenly w-full" />}>
+        <UnapprovedTransactions
+          transactions={unapprovedTransactions}
+          onTransactionSelectionChange={onTransactionSelectionChange}
+        />
+        <textarea
+          name="spreadsheetTransactions"
+          className="flex-1 h-500 w-full bg-white text-black"
+          value={
+            spreadsheetTransactions(
+              unapprovedTransactions.filter((t) => t.selected))}
+        />
+      </Wizard>
+    )
+  }
+
+  function accountChanged(newAccountId: string) {
+    setAccountId(newAccountId);
+    setIsUnapprovedTransactionsLoading(true);
+  }
+
   return (
     <main className="pt-16 pb-4 w-full flex flex-col items-center justify-center">
       <div className="flex flex-col items-center w-9/10 gap-y-10">
@@ -100,7 +130,7 @@ export function TransactionSplitter() {
           <AccountSelect
             name="accountId"
             selectedAccountId={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
+            onChange={(e) => accountChanged(e.target.value)}
             className="basis-1 bg-white text-black" />
 
           <CategorySelect
@@ -110,23 +140,7 @@ export function TransactionSplitter() {
             className="basis-1 bg-white text-black" />
         </div>
 
-        {accountId && (
-          <Wizard
-            header={<WizardHeader />}
-            wrapper={<div className="flex justify-evenly w-full" />}>
-            <UnapprovedTransactions
-              transactions={unapprovedTransactions}
-              onTransactionSelectionChange={onTransactionSelectionChange}
-            />
-            <textarea
-              name="spreadsheetTransactions"
-              className="flex-1 h-500 w-full bg-white text-black"
-              value={
-                spreadsheetTransactions(
-                  unapprovedTransactions.filter((t) => t.selected))}
-            />
-          </Wizard>
-        )}
+        <SplitterWizard />
       </div>
     </main >
   );

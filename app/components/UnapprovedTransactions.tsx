@@ -16,7 +16,7 @@ export function UnapprovedTransactions(
     onTransactionSelectionChange
   }: UnapprovedTransactionsProps
 ) {
-  if (!transactions) {
+  if (!transactions.length) {
     return <span>No unapproved transactions found.</span>;
   }
 
@@ -35,7 +35,7 @@ export function UnapprovedTransactions(
       </thead>
       <tbody>
         {transactions.map((transaction) =>
-          <Transaction value={transaction}>
+          <Transaction key={transaction.id} value={transaction}>
             <TableCell>
               <input
                 type="checkbox"

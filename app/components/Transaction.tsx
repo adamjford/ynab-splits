@@ -19,7 +19,7 @@ export function Transaction({ value, children }: TransactionProps) {
   }
 
   return (
-    <TableRow key={value.id}>
+    <TableRow>
       {children}
       <TableCell>{value.date}</TableCell>
       <TableCell>{value.payee_name}</TableCell>
