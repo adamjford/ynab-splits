@@ -1,31 +1,22 @@
 import type { TransactionDetail } from "ynab"
-import { useState } from "react";
-import type { api as YnabApi } from "ynab";
-import { useYnabFetchEffect } from "~/hooks/ynab/useYnabFetchEffect";
 import { Transaction } from "./Transaction";
-import { Table, TableRow } from "./Table";
+import { Table, TableCell, TableHeaderCell, TableRow } from "./Table";
 
+export interface UnapprovedTransaction extends TransactionDetail {
+  selected: boolean
+}
 export interface UnapprovedTransactionsProps {
-  accountId: string
+  transactions: UnapprovedTransaction[],
+  onTransactionSelectionChange: (unapprovedTransaction: UnapprovedTransaction, newSelectedValue: boolean) => void
 }
 
 export function UnapprovedTransactions(
-  { accountId }: UnapprovedTransactionsProps
+  {
+    transactions,
+    onTransactionSelectionChange
+  }: UnapprovedTransactionsProps
 ) {
-  const [unapprovedTransactions, setUnapprovedTransactions] = useState([] as TransactionDetail[]);
-
-  async function getTransactions(ynabApi: YnabApi): Promise<TransactionDetail[]> {
-    const transactionsResponse = await ynabApi.transactions.getTransactionsByAccount("default", accountId);
-    return transactionsResponse.data.transactions
-      .filter((transaction) => !transaction.approved && !transaction.deleted);
-  }
-
-  useYnabFetchEffect(
-    getTransactions,
-    setUnapprovedTransactions
-  )
-
-  if (!unapprovedTransactions) {
+  if (!transactions) {
     return <span>No unapproved transactions found.</span>;
   }
 
@@ -33,17 +24,30 @@ export function UnapprovedTransactions(
     <Table>
       <thead>
         <TableRow>
-          <th>Date</th>
-          <th>Payee</th>
-          <th>Category</th>
-          <th>Memo</th>
-          <th>Outflow</th>
-          <th>Inflow</th>
+          <TableHeaderCell>Selected</TableHeaderCell>
+          <TableHeaderCell>Date</TableHeaderCell>
+          <TableHeaderCell>Payee</TableHeaderCell>
+          <TableHeaderCell>Category</TableHeaderCell>
+          <TableHeaderCell>Memo</TableHeaderCell>
+          <TableHeaderCell>Outflow</TableHeaderCell>
+          <TableHeaderCell>Inflow</TableHeaderCell>
         </TableRow>
       </thead>
       <tbody>
-        {unapprovedTransactions.map((transaction) =>
-          <Transaction value={transaction} />
+        {transactions.map((transaction) =>
+          <Transaction value={transaction}>
+            <TableCell>
+              <input
+                type="checkbox"
+                name={`transaction-${transaction.id}-selected`}
+                checked={transaction.selected}
+                onChange={
+                  (e) => onTransactionSelectionChange(
+                    transaction,
+                    e.target.checked)}
+              />
+            </TableCell>
+          </Transaction>
         )}
       </tbody>
     </Table>

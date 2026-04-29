@@ -1,12 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, type PropsWithChildren } from "react";
 import { type TransactionDetail, utils } from "ynab";
 import { TableCell, TableRow } from "./Table";
 
-export interface TransactionProps {
+export interface TransactionProps extends PropsWithChildren {
   value: TransactionDetail
 }
 
-export function Transaction({ value }: TransactionProps) {
+export function Transaction({ value, children }: TransactionProps) {
   const numberFormat = useMemo(
     () => new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }),
     []
@@ -20,6 +20,7 @@ export function Transaction({ value }: TransactionProps) {
 
   return (
     <TableRow key={value.id}>
+      {children}
       <TableCell>{value.date}</TableCell>
       <TableCell>{value.payee_name}</TableCell>
       <TableCell>{value.category_name}</TableCell>

@@ -1,10 +1,11 @@
 import type { api as YnabApi } from "ynab";
 import { useYnabApi } from "./useYnabApi";
-import { useEffect } from "react";
+import { useEffect, type DependencyList } from "react";
 
 export function useYnabFetchEffect<ReturnType>(
   fetchFn: (ynabApi: YnabApi) => Promise<ReturnType[]>,
-  setterFn: (value: ReturnType[]) => void
+  setterFn: (value: ReturnType[]) => void,
+  dependencies: DependencyList = []
 ) {
   const ynabApi = useYnabApi();
 
@@ -24,6 +25,6 @@ export function useYnabFetchEffect<ReturnType>(
     return () => {
       ignore = true;
     }
-  }, [ynabApi]);
+  }, dependencies);
 
 }
