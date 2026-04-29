@@ -2,10 +2,20 @@ import { useState } from "react";
 import { AccountSelect, CategorySelect } from "~/components";
 import { UnapprovedTransactions, type UnapprovedTransaction } from "~/components/UnapprovedTransactions";
 import { useYnabFetchEffect } from "~/hooks/ynab/useYnabFetchEffect";
-import type { api as YnabApi } from "ynab";
+import { utils, type api as YnabApi } from "ynab";
 import { useImmer } from "use-immer";
+import { Wizard, useWizard } from 'react-use-wizard';
+import { useNumberFormat } from "~/context/numberFormatContext";
 
 export function TransactionSplitter() {
+  const numberFormat = useNumberFormat();
+
+  function fmt(value: number): string {
+    return numberFormat.format(
+      utils.convertMilliUnitsToCurrencyAmount(value)
+    )
+  }
+
   const [accountId, setAccountId] = useState("");
   const [settlingUpCategoryId, setSettlingUpCategoryId] = useState("");
   const [unapprovedTransactions, setUnapprovedTransactions] = useImmer([] as UnapprovedTransaction[]);
@@ -43,34 +53,81 @@ export function TransactionSplitter() {
     });
   }
 
+  function spreadsheetTransactions(transactions: UnapprovedTransaction[]): string {
+    return transactions
+      .map((t) => [
+        t.date,
+        t.payee_name,
+        utils.convertMilliUnitsToCurrencyAmount(-t.amount),
+        "Adam"
+      ])
+      .map((t) => t.join("\t"))
+      .join("\n")
+  }
+
+  function WizardHeader() {
+    const {
+      isFirstStep,
+      isLastStep,
+      previousStep,
+      nextStep
+    } = useWizard();
+
+    return (
+      <div className="flex justify-evenly w-full">
+        {!isFirstStep &&
+          <button
+            className="basis-1"
+            onClick={previousStep}>
+            Previous
+          </button>
+        }
+        {!isLastStep &&
+          <button
+            className="basis-1"
+            onClick={nextStep}>
+            Next
+          </button>
+        }
+      </div>
+    );
+  }
+
   return (
     <main className="pt-16 pb-4 w-full flex flex-col items-center justify-center">
-      <form className="flex flex-wrap items-center justify-center w-2/3 gap-y-20">
-        <AccountSelect
-          name="accountId"
-          selectedAccountId={accountId}
-          onChange={(e) => setAccountId(e.target.value)}
-          className="m-auto bg-white text-black" />
+      <div className="flex flex-col items-center w-9/10 gap-y-10">
+        <div className="flex justify-evenly w-full">
+          <AccountSelect
+            name="accountId"
+            selectedAccountId={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+            className="basis-1 bg-white text-black" />
 
-        <CategorySelect
-          name="settlingUpCategoryId"
-          selectedCategoryId={settlingUpCategoryId}
-          onChange={(e) => setSettlingUpCategoryId(e.target.value)}
-          className="m-auto bg-white text-black" />
+          <CategorySelect
+            name="settlingUpCategoryId"
+            selectedCategoryId={settlingUpCategoryId}
+            onChange={(e) => setSettlingUpCategoryId(e.target.value)}
+            className="basis-1 bg-white text-black" />
+        </div>
 
-        {accountId
-          ? <UnapprovedTransactions
-            transactions={unapprovedTransactions}
-            onTransactionSelectionChange={onTransactionSelectionChange}
-          />
-          : null}
-
-        <button
-          className="bg-gray-500 text-black m-auto"
-          type="submit">
-          Submit
-        </button>
-      </form>
-    </main>
+        {accountId && (
+          <Wizard
+            header={<WizardHeader />}
+            wrapper={<div className="flex justify-evenly w-full" />}>
+            <UnapprovedTransactions
+              transactions={unapprovedTransactions}
+              onTransactionSelectionChange={onTransactionSelectionChange}
+            />
+            <textarea
+              name="spreadsheetTransactions"
+              className="flex-1 h-500 w-full bg-white text-black"
+              value={
+                spreadsheetTransactions(
+                  unapprovedTransactions.filter((t) => t.selected))}
+            />
+          </Wizard>
+        )}
+      </div>
+    </main >
   );
 }

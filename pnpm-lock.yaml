@@ -29,6 +29,9 @@ importers:
       react-router:
         specifier: 7.14.0
         version: 7.14.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      react-use-wizard:
+        specifier: ^2.3.0
+        version: 2.3.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       use-immer:
         specifier: ^0.11.0
         version: 0.11.0(immer@11.1.4)(react@19.2.5)
@@ -1315,6 +1318,13 @@ packages:
     peerDependenciesMeta:
       react-dom:
         optional: true
+
+  react-use-wizard@2.3.0:
+    resolution: {integrity: sha512-z06pQNZ18FvoK+ZDW50hOf0uOySo0Hhd7H4y0MLyk/tBCwpUKGBeULosORBVhipUaWihNLpLJxwH5f+85Qt5XA==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
 
   react@19.2.5:
     resolution: {integrity: sha512-llUJLzz1zTUBrskt2pwZgLq59AemifIftw4aB7JxOqf1HY2FDaGDxgwpAPVzHU1kdWabH7FauP4i1oEeer2WCA==}
@@ -2661,6 +2671,11 @@ snapshots:
       react: 19.2.5
       set-cookie-parser: 2.7.2
     optionalDependencies:
+      react-dom: 19.2.5(react@19.2.5)
+
+  react-use-wizard@2.3.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
+    dependencies:
+      react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
 
   react@19.2.5: {}
