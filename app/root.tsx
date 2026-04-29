@@ -9,7 +9,7 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
-import { YnabApiProvider } from "./hooks/ynab/ynabApiContext";
+import { YnabApiProvider } from "./context/ynab/ynabApiContext";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },

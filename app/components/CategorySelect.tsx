@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEventHandler } from "react";
-import { useYnab } from "~/hooks/ynab";
+import type { api as YnabApi } from "ynab";
+import { useYnabFetchEffect } from "~/hooks/ynab/useYnabFetchEffect";
 
 export function CategorySelect({
   name,
@@ -19,11 +20,9 @@ export function CategorySelect({
     group_name: string;
   }
 
-  const ynabApi = useYnab();
-
   const [categories, setCategories] = useState([] as Category[]);
 
-  async function getCategories(): Promise<Category[]> {
+  async function getCategories(ynabApi: YnabApi): Promise<Category[]> {
     const categoriesResponse = await ynabApi.categories.getCategories("default");
     return categoriesResponse.data.category_groups
       .filter(group => !group.deleted && !group.hidden)
@@ -44,23 +43,14 @@ export function CategorySelect({
       });
   }
 
-  useEffect(() => {
-    let ignore = false;
+  useYnabFetchEffect(
+    getCategories,
+    setCategories
+  )
 
-    async function startFetching() {
-      getCategories().then((result) => {
-        if (!ignore) {
-          setCategories(result);
-        }
-      });
-    }
-
-    startFetching();
-
-    return () => {
-      ignore = true;
-    }
-  }, [ynabApi]);
+  if (!categories) {
+    return null;
+  }
 
   return (
     <select

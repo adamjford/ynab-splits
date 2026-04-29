@@ -1,13 +1,13 @@
 import type { Route } from "./+types/home";
-import { Import } from "../import/import";
+import { TransactionSplitter } from "~/split/TransactionSplitter";
 
-export function meta({}: Route.MetaArgs) {
+export function meta({ }: Route.MetaArgs) {
   return [
-    { title: "New React Router App" },
-    { name: "description", content: "Welcome to React Router!" },
+    { title: "YNAB Splits" },
+    { name: "description", content: "Welcome to YNAB Splits!" },
   ];
 }
 
 export default function Home() {
-  return <Import />;
+  return <TransactionSplitter />;
 }

@@ -1,10 +1,10 @@
 import type { NewTransaction } from "ynab";
 import { useState } from "react";
 import { AccountSelect, CategorySelect } from "../components";
-import { useYnab } from "../hooks/ynab";
+import { useYnabApi } from "../hooks/ynab";
 
 export function Import() {
-  const ynabApi = useYnab();
+  const ynabApi = useYnabApi();
 
   function moneyToMilliunits(money: string): number {
     if (!money) return 0;
