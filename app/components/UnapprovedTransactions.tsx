@@ -1,6 +1,6 @@
 import type { TransactionDetail } from "ynab"
 import { Transaction } from "./Transaction";
-import { Table, TableCell, TableHeaderCell, TableRow } from "./Table";
+import { Table, TableCell, TableRow } from "./Table";
 
 export interface UnapprovedTransaction extends TransactionDetail {
   selected: boolean
@@ -23,20 +23,20 @@ export function UnapprovedTransactions(
   return (
     <Table>
       <thead>
-        <TableRow>
-          <TableHeaderCell>Selected</TableHeaderCell>
-          <TableHeaderCell>Date</TableHeaderCell>
-          <TableHeaderCell>Payee</TableHeaderCell>
-          <TableHeaderCell>Category</TableHeaderCell>
-          <TableHeaderCell>Memo</TableHeaderCell>
-          <TableHeaderCell>Outflow</TableHeaderCell>
-          <TableHeaderCell>Inflow</TableHeaderCell>
+        <TableRow className="bg-gray-800">
+          <TableCell isHeader textAlign="center">Selected</TableCell>
+          <TableCell isHeader>Date</TableCell>
+          <TableCell isHeader>Payee</TableCell>
+          <TableCell isHeader>Category</TableCell>
+          <TableCell isHeader>Memo</TableCell>
+          <TableCell isHeader textAlign="end">Outflow</TableCell>
+          <TableCell isHeader textAlign="end">Inflow</TableCell>
         </TableRow>
       </thead>
       <tbody>
         {transactions.map((transaction) =>
           <Transaction key={transaction.id} value={transaction}>
-            <TableCell>
+            <TableCell textAlign="center">
               <input
                 type="checkbox"
                 name={`transaction-${transaction.id}-selected`}

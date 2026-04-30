@@ -1,10 +1,12 @@
+import type { PropsWithChildren } from "react";
+
 interface Props extends React.PropsWithChildren {
   className?: string
 }
 
 export function Table({ className = "", children = null }: Props) {
   return (
-    <table className={className}>
+    <table className={`text-start border-collapse ${className}`}>
       {children}
     </table>
   )
@@ -20,25 +22,21 @@ export function TableRow({ className = "", children = null }: Props) {
 
 interface CellProps extends Props {
   isHeader?: boolean,
+  textAlign?: string
 }
 
-function Cell({ isHeader = false, className = "", children = null }: CellProps) {
+export function TableCell({
+  isHeader = false,
+  className = "",
+  textAlign = "start",
+  children = null
+}: CellProps) {
+  const props = {
+    className: `text-${textAlign} border-1 border-solid px-2 py-0.5 border-gray-500 ${className}`,
+    children: children
+  } as PropsWithChildren;
+
   return isHeader
-    ? (<th className={className}>{children}</th>)
-    : (<td className={className}>{children}</td>);
+    ? (<th {...props} />)
+    : (<td {...props} />);
 }
-
-export function TableHeaderCell({ className = "", children = null }: Props) {
-  return (
-    <Cell isHeader className={className}>
-      {children}
-    </Cell>);
-}
-
-export function TableCell({ className = "", children = null }: Props) {
-  return (
-    <Cell className={className}>
-      {children}
-    </Cell>);
-}
-

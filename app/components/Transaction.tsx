@@ -21,12 +21,12 @@ export function Transaction({ value, children }: TransactionProps) {
   return (
     <TableRow>
       {children}
-      <TableCell>{value.date}</TableCell>
+      <TableCell className="text-nowrap">{value.date}</TableCell>
       <TableCell>{value.payee_name}</TableCell>
       <TableCell>{value.category_name}</TableCell>
       <TableCell>{value.memo}</TableCell>
-      <TableCell>{value.amount < 0 ? fmt(-value.amount) : ""}</TableCell>
-      <TableCell>{value.amount > 0 ? fmt(value.amount) : ""}</TableCell>
+      <TableCell textAlign="end">{value.amount < 0 ? fmt(-value.amount) : ""}</TableCell>
+      <TableCell textAlign="end">{value.amount > 0 ? fmt(value.amount) : ""}</TableCell>
     </TableRow>
   )
 }
