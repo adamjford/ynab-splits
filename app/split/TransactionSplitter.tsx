@@ -5,6 +5,7 @@ import { useYnabFetchEffect } from "~/hooks/ynab/useYnabFetchEffect";
 import { utils, type api as YnabApi } from "ynab";
 import { useImmer } from "use-immer";
 import { Wizard, useWizard } from 'react-use-wizard';
+import { Button } from "~/components/Button";
 
 export function TransactionSplitter() {
   const [accountId, setAccountId] = useState("");
@@ -58,29 +59,43 @@ export function TransactionSplitter() {
       .join("\n")
   }
 
+  const spreadsheetTransactionsValue =
+    spreadsheetTransactions(
+      unapprovedTransactions.filter((t) => t.selected));
+
+  async function copy() {
+    await navigator.clipboard.writeText(spreadsheetTransactionsValue);
+  }
+
   function WizardHeader() {
     const {
       isFirstStep,
       isLastStep,
       previousStep,
-      nextStep
+      nextStep,
+      activeStep
     } = useWizard();
 
     return (
       <div className="flex justify-evenly w-full">
         {!isFirstStep &&
-          <button
-            className="basis-1"
+          <Button
             onClick={previousStep}>
             Previous
-          </button>
+          </Button>
+        }
+        {activeStep == 1 &&
+          <Button
+            type="button"
+            onClick={copy}>
+            Copy to clipboard
+          </Button>
         }
         {!isLastStep &&
-          <button
-            className="basis-1"
+          <Button
             onClick={nextStep}>
             Next
-          </button>
+          </Button>
         }
       </div>
     );
@@ -99,6 +114,7 @@ export function TransactionSplitter() {
       return <span>No unapproved transactions found for the selected account.</span>
     }
 
+
     return (
       <Wizard
         header={<WizardHeader />}
@@ -108,11 +124,10 @@ export function TransactionSplitter() {
           onTransactionSelectionChange={onTransactionSelectionChange}
         />
         <textarea
+          readOnly
           name="spreadsheetTransactions"
-          className="flex-1 h-500 w-full bg-white text-black"
-          value={
-            spreadsheetTransactions(
-              unapprovedTransactions.filter((t) => t.selected))}
+          className="w-1/2 field-sizing-content bg-white text-black"
+          value={spreadsheetTransactionsValue}
         />
       </Wizard>
     )
