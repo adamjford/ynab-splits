@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { AccountSelect, CategorySelect } from "~/components";
-import { UnapprovedTransactions, type UnapprovedTransaction } from "~/components/UnapprovedTransactions";
+import { UnsplitTransactions, type UnapprovedTransaction } from "./UnsplitTransactions";
 import { useYnabFetchEffect } from "~/hooks/ynab/useYnabFetchEffect";
-import { utils, type api as YnabApi } from "ynab";
+import { utils, type api as YnabApi, type TransactionDetail, type SubTransaction } from "ynab";
 import { useImmer } from "use-immer";
 import { Wizard, useWizard } from 'react-use-wizard';
 import { Button } from "~/components/Button";
+import { SplitTransactions } from "./SplitTransactions";
 
 export function TransactionSplitter() {
   const [accountId, setAccountId] = useState("");
@@ -20,7 +21,10 @@ export function TransactionSplitter() {
     const transactionsResponse =
       await ynabApi.transactions.getTransactionsByAccount("default", accountId);
     return transactionsResponse.data.transactions
-      .filter((transaction) => !transaction.approved && !transaction.deleted)
+      .filter((transaction) =>
+        !transaction.approved &&
+        !transaction.deleted &&
+        transaction.subtransactions.length < 2)
       .map((transaction) => {
         return {
           selected: true,
@@ -47,7 +51,38 @@ export function TransactionSplitter() {
     });
   }
 
-  function spreadsheetTransactions(transactions: UnapprovedTransaction[]): string {
+  function selectedTransactions(): TransactionDetail[] {
+    return (
+      unapprovedTransactions
+        .filter((t) => t.selected) as TransactionDetail[]);
+  }
+
+  function splitTransactions(): TransactionDetail[] {
+    return selectedTransactions().map((t) => {
+      const myAmount = Math.ceil(t.amount / 20) * 10;
+      const settleUpAmount = t.amount - myAmount;
+
+      return {
+        ...t,
+        subtransactions: [
+          {
+            transaction_id: t.id,
+            category_id: settlingUpCategoryId,
+            amount: settleUpAmount
+
+          } as SubTransaction,
+          {
+            transaction_id: t.id,
+            category_id: t.category_id,
+            category_name: t.category_name,
+            amount: myAmount
+          } as SubTransaction,
+        ]
+      } as TransactionDetail
+    });
+  }
+
+  function spreadsheetTransactions(transactions: TransactionDetail[]): string {
     return transactions
       .map((t) => [
         t.date,
@@ -59,9 +94,7 @@ export function TransactionSplitter() {
       .join("\n")
   }
 
-  const spreadsheetTransactionsValue =
-    spreadsheetTransactions(
-      unapprovedTransactions.filter((t) => t.selected));
+  const spreadsheetTransactionsValue = spreadsheetTransactions(selectedTransactions());
 
   async function copy() {
     await navigator.clipboard.writeText(spreadsheetTransactionsValue);
@@ -119,7 +152,7 @@ export function TransactionSplitter() {
       <Wizard
         header={<WizardHeader />}
         wrapper={<div className="flex justify-evenly w-full" />}>
-        <UnapprovedTransactions
+        <UnsplitTransactions
           transactions={unapprovedTransactions}
           onTransactionSelectionChange={onTransactionSelectionChange}
         />
@@ -128,6 +161,9 @@ export function TransactionSplitter() {
           name="spreadsheetTransactions"
           className="w-1/2 field-sizing-content bg-white text-black"
           value={spreadsheetTransactionsValue}
+        />
+        <SplitTransactions
+          transactions={splitTransactions()}
         />
       </Wizard>
     )

@@ -32,7 +32,7 @@ export function TableCell({
   children = null
 }: CellProps) {
   const props = {
-    className: `text-${textAlign} border-1 border-solid px-2 py-0.5 border-gray-500 ${className}`,
+    className: `text-${textAlign} border-1 border-solid px-2 py-0.5 border-gray-700 ${className}`,
     children: children
   } as PropsWithChildren;
 

@@ -1,5 +1,4 @@
 import { createContext, useContext, useState } from "react";
-
 export const NumberFormatContext = createContext(null as Intl.NumberFormat | null);
 
 export const NumberFormatProvider = ({ children }: React.PropsWithChildren) => {

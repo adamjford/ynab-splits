@@ -1,20 +1,20 @@
 import type { TransactionDetail } from "ynab"
-import { Transaction } from "./Transaction";
-import { Table, TableCell, TableRow } from "./Table";
+import { Table, TableCell, TableRow, Transaction } from "~/components";
 
 export interface UnapprovedTransaction extends TransactionDetail {
   selected: boolean
 }
-export interface UnapprovedTransactionsProps {
+
+export interface UnsplitTransactionsProps {
   transactions: UnapprovedTransaction[],
   onTransactionSelectionChange: (unapprovedTransaction: UnapprovedTransaction, newSelectedValue: boolean) => void
 }
 
-export function UnapprovedTransactions(
+export function UnsplitTransactions(
   {
     transactions,
     onTransactionSelectionChange
-  }: UnapprovedTransactionsProps
+  }: UnsplitTransactionsProps
 ) {
   if (!transactions.length) {
     return <span>No unapproved transactions found.</span>;
@@ -34,8 +34,11 @@ export function UnapprovedTransactions(
         </TableRow>
       </thead>
       <tbody>
-        {transactions.map((transaction) =>
-          <Transaction key={transaction.id} value={transaction}>
+        {transactions.map((transaction: UnapprovedTransaction, index: number) =>
+          <Transaction
+            key={transaction.id}
+            value={transaction}
+            className={index % 2 != 0 ? "bg-gray-900" : ""}>
             <TableCell textAlign="center">
               <input
                 type="checkbox"
