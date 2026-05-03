@@ -6,11 +6,15 @@ import { AccountSelect, CategorySelect } from "~/components";
 import { Button } from "~/components/Button";
 import { useYnabApi } from "~/hooks/ynab";
 import { useYnabFetchEffect } from "~/hooks/ynab/useYnabFetchEffect";
-import { SplitTransactions } from "./SplitTransactions";
-import { UnsplitTransactions, type UnapprovedTransaction } from "./UnsplitTransactions";
+import { TransactionsToSave } from "./TransactionsToSave";
+import { UnsplitTransactions, type UnsplitTransaction } from "./UnsplitTransactions";
+import { useAccounts } from "~/hooks/ynab/useAccounts";
 
 export function TransactionSplitter() {
   const ynabApi = useYnabApi();
+  const accounts = useAccounts();
+
+  const onBudgetAccounts = accounts.filter((a) => a.on_budget);
 
   const [accountId, setAccountId] = useState("");
   const [settlingUpCategory, setSettlingUpCategory] =
@@ -18,28 +22,36 @@ export function TransactionSplitter() {
   const [isUnapprovedTransactionsLoading, setIsUnapprovedTransactionsLoading] =
     useState(true);
   const [unapprovedTransactions, setUnapprovedTransactions] =
-    useImmer([] as UnapprovedTransaction[]);
+    useImmer([] as UnsplitTransaction[]);
   const [unapprovedTransactionsRefreshKey, setUnapprovedTransactionsRefreshKey] =
     useImmer(0);
 
-  async function getTransactions(ynabApi: YnabApi): Promise<UnapprovedTransaction[]> {
+  async function getTransactions(ynabApi: YnabApi): Promise<UnsplitTransaction[]> {
     if (!accountId) {
       return [];
     }
+
     const transactionsResponse =
       await ynabApi.transactions.getTransactionsByAccount(
         "default",
-        accountId);
+        accountId,
+        undefined,
+        "unapproved"
+      );
+
     return transactionsResponse.data.transactions
       .filter((transaction) =>
-        !transaction.approved &&
         !transaction.deleted &&
+        (!transaction.transfer_account_id ||
+          onBudgetAccounts.every((a) => transaction.transfer_account_id != a.id)) &&
+        transaction.flag_color != "green" &&
         transaction.subtransactions.length < 2)
       .map((transaction) => {
         return {
           selected: true,
+          toSplit: transaction.category_id != settlingUpCategory.id,
           ...transaction
-        } as UnapprovedTransaction
+        } as UnsplitTransaction
       });
   }
 
@@ -47,33 +59,57 @@ export function TransactionSplitter() {
     getTransactions,
     setUnapprovedTransactions,
     setIsUnapprovedTransactionsLoading,
-    [accountId, unapprovedTransactionsRefreshKey]
+    [accountId, settlingUpCategory.id, unapprovedTransactionsRefreshKey]
   )
 
   function onTransactionSelectionChange(
-    transaction: UnapprovedTransaction,
-    newSelectedValue: boolean
+    transactionId: string,
+    valueName: "selected" | "toSplit",
+    newValue: boolean
   ) {
     setUnapprovedTransactions((draft) => {
-      draft.find(
-        (t) => t.id == transaction.id
-      )!.selected = newSelectedValue;
+      const draftTransaction = draft.find(
+        (t) => t.id == transactionId
+      )!;
+
+      if (valueName == "selected") {
+        draftTransaction.selected = newValue;
+      }
+
+      if (valueName == "toSplit") {
+        draftTransaction.toSplit = newValue;
+      }
     });
   }
 
-  function selectedTransactions(): TransactionDetail[] {
+  function selectedTransactions(): UnsplitTransaction[] {
     return (
       unapprovedTransactions
-        .filter((t) => t.selected) as TransactionDetail[]);
+        .filter((t) => t.selected));
   }
 
-  function splitTransactions(): TransactionDetail[] {
-    return selectedTransactions().map((t) => {
-      const myAmount = Math.ceil(t.amount / 20) * 10;
-      const settleUpAmount = t.amount - myAmount;
+  function transactionToSave(): TransactionDetail[] {
+    return selectedTransactions().map((t: UnsplitTransaction) => {
+      let transaction = t as TransactionDetail;
+
+      if (!t.toSplit) {
+        if (!t.category_id) {
+          transaction = {
+            ...transaction,
+            category_id: settlingUpCategory.id,
+            category_name: settlingUpCategory.name
+          };
+        }
+
+        return transaction;
+      }
+
+      const settleUpAmount = Math.ceil(t.amount / 20) * 10;
+      const myAmount = t.amount - settleUpAmount;
 
       return {
-        ...t,
+        ...transaction,
+        flag_color: "green",
         subtransactions: [
           {
             transaction_id: t.id,
@@ -92,14 +128,31 @@ export function TransactionSplitter() {
     });
   }
 
-  function spreadsheetTransactions(transactions: TransactionDetail[]): string {
+  function spreadsheetTransactions(transactions: UnsplitTransaction[]): string {
     return transactions
-      .map((t) => [
-        t.date,
-        t.payee_name,
-        utils.convertMilliUnitsToCurrencyAmount(-t.amount),
-        "Adam"
-      ])
+      .map((t: UnsplitTransaction) => {
+        let array =
+          [
+            t.date,
+            t.payee_name,
+          ] as (string | number | null | undefined)[];
+
+        if (t.toSplit) {
+          array.push(
+            utils.convertMilliUnitsToCurrencyAmount(-t.amount),
+            "Adam"
+          );
+        } else {
+          array.push(
+            utils.convertMilliUnitsToCurrencyAmount(t.amount),
+            "Chelsea",
+            "1",
+            "0"
+          );
+        }
+
+        return array;
+      })
       .map((t) => t.join("\t"))
       .join("\n")
   }
@@ -114,7 +167,7 @@ export function TransactionSplitter() {
     await ynabApi.transactions.updateTransactions(
       "default",
       {
-        transactions: splitTransactions()
+        transactions: transactionToSave()
       } as PatchTransactionsWrapper
     )
 
@@ -196,8 +249,8 @@ export function TransactionSplitter() {
           className="w-1/2 field-sizing-content bg-white text-black"
           value={spreadsheetTransactionsValue}
         />
-        <SplitTransactions
-          transactions={splitTransactions()}
+        <TransactionsToSave
+          transactions={transactionToSave()}
         />
       </Wizard>
     )

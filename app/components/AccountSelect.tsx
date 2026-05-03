@@ -1,6 +1,5 @@
-import { useState, type ChangeEventHandler } from "react";
-import type { api as YnabApi } from "ynab";
-import { useYnabFetchEffect } from "~/hooks/ynab/useYnabFetchEffect";
+import type { ChangeEventHandler } from "react";
+import { useAccounts } from "~/hooks/ynab/useAccounts";
 
 export function AccountSelect({
   name,
@@ -13,33 +12,7 @@ export function AccountSelect({
   selectedAccountId?: string,
   onChange?: ChangeEventHandler<HTMLSelectElement>
 }) {
-  interface Account {
-    id: string;
-    name: string;
-  }
-
-  const [accounts, setAccounts] = useState([] as Account[]);
-
-  async function getAccounts(ynabApi: YnabApi): Promise<Account[]> {
-    const accountsResponse = await ynabApi.accounts.getAccounts("default");
-    return accountsResponse.data.accounts
-      .filter(account => !account.deleted && !account.closed)
-      .map(account => {
-        return {
-          id: account.id,
-          name: account.name,
-        };
-      });
-  }
-
-  useYnabFetchEffect(
-    getAccounts,
-    setAccounts
-  )
-
-  if (!accounts) {
-    return null;
-  }
+  const accounts = useAccounts();
 
   return (
     <select

@@ -1,13 +1,17 @@
 import type { TransactionDetail } from "ynab"
 import { Table, TableCell, TableRow, Transaction } from "~/components";
 
-export interface UnapprovedTransaction extends TransactionDetail {
-  selected: boolean
+export interface UnsplitTransaction extends TransactionDetail {
+  selected: boolean,
+  toSplit: boolean
 }
 
 export interface UnsplitTransactionsProps {
-  transactions: UnapprovedTransaction[],
-  onTransactionSelectionChange: (unapprovedTransaction: UnapprovedTransaction, newSelectedValue: boolean) => void
+  transactions: UnsplitTransaction[],
+  onTransactionSelectionChange: (
+    transactionId: string,
+    valueName: "selected" | "toSplit",
+    newValue: boolean) => void
 }
 
 export function UnsplitTransactions(
@@ -25,6 +29,7 @@ export function UnsplitTransactions(
       <thead>
         <TableRow className="bg-gray-800">
           <TableCell isHeader textAlign="center">Selected</TableCell>
+          <TableCell isHeader textAlign="center">Split?</TableCell>
           <TableCell isHeader>Date</TableCell>
           <TableCell isHeader>Payee</TableCell>
           <TableCell isHeader>Category</TableCell>
@@ -34,7 +39,7 @@ export function UnsplitTransactions(
         </TableRow>
       </thead>
       <tbody>
-        {transactions.map((transaction: UnapprovedTransaction, index: number) =>
+        {transactions.map((transaction: UnsplitTransaction, index: number) =>
           <Transaction
             key={transaction.id}
             value={transaction}
@@ -46,9 +51,23 @@ export function UnsplitTransactions(
                 checked={transaction.selected}
                 onChange={
                   (e) => onTransactionSelectionChange(
-                    transaction,
+                    transaction.id,
+                    "selected",
                     e.target.checked)}
               />
+            </TableCell>
+            <TableCell textAlign="center">
+              {transaction.selected && !transaction.transfer_account_id &&
+                <input
+                  type="checkbox"
+                  name={`transaction-${transaction.id}-toSplit`}
+                  checked={transaction.toSplit}
+                  onChange={
+                    (e) => onTransactionSelectionChange(
+                      transaction.id,
+                      "toSplit",
+                      e.target.checked)}
+                />}
             </TableCell>
           </Transaction>
         )}
