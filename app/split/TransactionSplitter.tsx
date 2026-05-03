@@ -1,25 +1,35 @@
 import { useState } from "react";
-import { AccountSelect, CategorySelect } from "~/components";
-import { UnsplitTransactions, type UnapprovedTransaction } from "./UnsplitTransactions";
-import { useYnabFetchEffect } from "~/hooks/ynab/useYnabFetchEffect";
-import { utils, type api as YnabApi, type TransactionDetail, type SubTransaction } from "ynab";
-import { useImmer } from "use-immer";
 import { Wizard, useWizard } from 'react-use-wizard';
+import { useImmer } from "use-immer";
+import { utils, type PatchTransactionsWrapper, type TransactionDetail, type api as YnabApi } from "ynab";
+import { AccountSelect, CategorySelect } from "~/components";
 import { Button } from "~/components/Button";
+import { useYnabApi } from "~/hooks/ynab";
+import { useYnabFetchEffect } from "~/hooks/ynab/useYnabFetchEffect";
 import { SplitTransactions } from "./SplitTransactions";
+import { UnsplitTransactions, type UnapprovedTransaction } from "./UnsplitTransactions";
 
 export function TransactionSplitter() {
+  const ynabApi = useYnabApi();
+
   const [accountId, setAccountId] = useState("");
-  const [settlingUpCategoryId, setSettlingUpCategoryId] = useState("");
-  const [isUnapprovedTransactionsLoading, setIsUnapprovedTransactionsLoading] = useState(true);
-  const [unapprovedTransactions, setUnapprovedTransactions] = useImmer([] as UnapprovedTransaction[]);
+  const [settlingUpCategory, setSettlingUpCategory] =
+    useState({ id: "", name: "" });
+  const [isUnapprovedTransactionsLoading, setIsUnapprovedTransactionsLoading] =
+    useState(true);
+  const [unapprovedTransactions, setUnapprovedTransactions] =
+    useImmer([] as UnapprovedTransaction[]);
+  const [unapprovedTransactionsRefreshKey, setUnapprovedTransactionsRefreshKey] =
+    useImmer(0);
 
   async function getTransactions(ynabApi: YnabApi): Promise<UnapprovedTransaction[]> {
     if (!accountId) {
       return [];
     }
     const transactionsResponse =
-      await ynabApi.transactions.getTransactionsByAccount("default", accountId);
+      await ynabApi.transactions.getTransactionsByAccount(
+        "default",
+        accountId);
     return transactionsResponse.data.transactions
       .filter((transaction) =>
         !transaction.approved &&
@@ -37,7 +47,7 @@ export function TransactionSplitter() {
     getTransactions,
     setUnapprovedTransactions,
     setIsUnapprovedTransactionsLoading,
-    [accountId]
+    [accountId, unapprovedTransactionsRefreshKey]
   )
 
   function onTransactionSelectionChange(
@@ -67,16 +77,16 @@ export function TransactionSplitter() {
         subtransactions: [
           {
             transaction_id: t.id,
-            category_id: settlingUpCategoryId,
+            category_id: settlingUpCategory.id,
+            category_name: settlingUpCategory.name,
             amount: settleUpAmount
-
-          } as SubTransaction,
+          },
           {
             transaction_id: t.id,
             category_id: t.category_id,
             category_name: t.category_name,
             amount: myAmount
-          } as SubTransaction,
+          },
         ]
       } as TransactionDetail
     });
@@ -100,6 +110,17 @@ export function TransactionSplitter() {
     await navigator.clipboard.writeText(spreadsheetTransactionsValue);
   }
 
+  async function update() {
+    await ynabApi.transactions.updateTransactions(
+      "default",
+      {
+        transactions: splitTransactions()
+      } as PatchTransactionsWrapper
+    )
+
+    setUnapprovedTransactionsRefreshKey((draft) => draft + 1);
+  }
+
   function WizardHeader() {
     const {
       isFirstStep,
@@ -117,13 +138,26 @@ export function TransactionSplitter() {
             Previous
           </Button>
         }
-        {activeStep == 1 &&
-          <Button
-            type="button"
-            onClick={copy}>
-            Copy to clipboard
-          </Button>
-        }
+        {(() => {
+          switch (activeStep) {
+            case 1:
+              return (
+                <Button
+                  type="button"
+                  onClick={copy}>
+                  Copy to clipboard
+                </Button>);
+            case 2:
+              return (
+                <Button
+                  type="button"
+                  onClick={update}>
+                  Update YNAB
+                </Button>);
+            default:
+              return null;
+          }
+        })()}
         {!isLastStep &&
           <Button
             onClick={nextStep}>
@@ -172,6 +206,7 @@ export function TransactionSplitter() {
   function accountChanged(newAccountId: string) {
     setAccountId(newAccountId);
     setIsUnapprovedTransactionsLoading(true);
+    setUnapprovedTransactionsRefreshKey(0);
   }
 
   return (
@@ -186,8 +221,13 @@ export function TransactionSplitter() {
 
           <CategorySelect
             name="settlingUpCategoryId"
-            selectedCategoryId={settlingUpCategoryId}
-            onChange={(e) => setSettlingUpCategoryId(e.target.value)}
+            selectedCategoryId={settlingUpCategory.id}
+            onChange={(e) =>
+              setSettlingUpCategory(
+                {
+                  id: e.target.value,
+                  name: e.target.selectedOptions[0].innerText
+                })}
             className="basis-1 bg-white text-black" />
         </div>
 

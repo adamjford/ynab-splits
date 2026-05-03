@@ -40,8 +40,8 @@ export function SplitTransaction(props: SplitTransactionProps) {
         <TableCell textAlign="end">{outflow(value.amount)}</TableCell>
         <TableCell textAlign="end">{inflow(value.amount)}</TableCell>
       </TableRow>
-      {value.subtransactions.map((subtransaction: SubTransaction) =>
-        <TableRow {...props}>
+      {value.subtransactions.map((subtransaction: SubTransaction, index: number) =>
+        <TableRow key={index} {...props}>
           <TableCell></TableCell>
           <TableCell>{subtransaction.payee_name}</TableCell>
           <TableCell>{subtransaction.category_name}</TableCell>
