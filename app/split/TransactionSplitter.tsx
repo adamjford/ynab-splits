@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Wizard, useWizard } from 'react-use-wizard';
 import { useImmer } from "use-immer";
-import { utils, type PatchTransactionsWrapper, type TransactionDetail, type api as YnabApi } from "ynab";
+import { utils, type PatchTransactionsWrapper, type SubTransaction, type TransactionDetail, type api as YnabApi } from "ynab";
 import { AccountSelect, CategorySelect } from "~/components";
 import { Button } from "~/components/Button";
 import { useYnabApi } from "~/hooks/ynab";
@@ -89,41 +89,47 @@ export function TransactionSplitter() {
   }
 
   function transactionToSave(): TransactionDetail[] {
-    return selectedTransactions().map((t: UnsplitTransaction) => {
+    return unapprovedTransactions.map((t: UnsplitTransaction) => {
       let transaction = t as TransactionDetail;
 
-      if (!t.toSplit) {
-        if (!t.category_id) {
-          transaction = {
-            ...transaction,
-            category_id: settlingUpCategory.id,
-            category_name: settlingUpCategory.name
-          };
+      let {
+        id,
+        category_id,
+        category_name,
+        subtransactions,
+      } = transaction;
+
+      if (t.selected) {
+        if (!t.toSplit && !t.category_id) {
+          category_id = settlingUpCategory.id;
+          category_name = settlingUpCategory.name;
+        } else if (!t.toSplit) {
+          const settleUpAmount = Math.ceil(t.amount / 20) * 10;
+          const myAmount = t.amount - settleUpAmount;
+
+          subtransactions = [
+            {
+              transaction_id: id,
+              category_id: settlingUpCategory.id,
+              category_name: settlingUpCategory.name,
+              amount: settleUpAmount
+            },
+            {
+              transaction_id: id,
+              category_id: category_id,
+              category_name: category_name,
+              amount: myAmount
+            },
+          ] as SubTransaction[];
         }
-
-        return transaction;
       }
-
-      const settleUpAmount = Math.ceil(t.amount / 20) * 10;
-      const myAmount = t.amount - settleUpAmount;
 
       return {
         ...transaction,
         flag_color: "green",
-        subtransactions: [
-          {
-            transaction_id: t.id,
-            category_id: settlingUpCategory.id,
-            category_name: settlingUpCategory.name,
-            amount: settleUpAmount
-          },
-          {
-            transaction_id: t.id,
-            category_id: t.category_id,
-            category_name: t.category_name,
-            amount: myAmount
-          },
-        ]
+        category_id: category_id,
+        category_name: category_name,
+        subtransactions: subtransactions
       } as TransactionDetail
     });
   }
