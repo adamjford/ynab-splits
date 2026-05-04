@@ -1,29 +1,25 @@
 import type { TransactionDetail } from "ynab"
 import { Table, TableCell, TableRow, Transaction } from "~/components";
 
-export interface UnsplitTransaction extends TransactionDetail {
+export interface FlaggedTransaction extends TransactionDetail {
   selected: boolean,
   toSplit: boolean
 }
 
-export interface UnsplitTransactionsProps {
-  transactions: UnsplitTransaction[],
+export interface FlaggedTransactionsProps {
+  transactions: FlaggedTransaction[],
   onTransactionSelectionChange: (
     transactionId: string,
     valueName: "selected" | "toSplit",
     newValue: boolean) => void
 }
 
-export function UnsplitTransactions(
+export function FlaggedTransactions(
   {
     transactions,
     onTransactionSelectionChange
-  }: UnsplitTransactionsProps
+  }: FlaggedTransactionsProps
 ) {
-  if (!transactions.length) {
-    return <span>No unapproved transactions found.</span>;
-  }
-
   return (
     <Table>
       <thead>
@@ -39,7 +35,7 @@ export function UnsplitTransactions(
         </TableRow>
       </thead>
       <tbody>
-        {transactions.map((transaction: UnsplitTransaction, index: number) =>
+        {transactions.map((transaction: FlaggedTransaction, index: number) =>
           <Transaction
             key={transaction.id}
             value={transaction}

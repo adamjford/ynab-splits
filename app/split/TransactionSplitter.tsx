@@ -7,7 +7,7 @@ import { Button } from "~/components/Button";
 import { useYnabApi } from "~/hooks/ynab";
 import { useYnabFetchEffect } from "~/hooks/ynab/useYnabFetchEffect";
 import { TransactionsToSave } from "./TransactionsToSave";
-import { UnsplitTransactions, type UnsplitTransaction } from "./UnsplitTransactions";
+import { FlaggedTransactions, type FlaggedTransaction } from "./FlaggedTransactions";
 import { useAccounts } from "~/hooks/ynab/useAccounts";
 
 export function TransactionSplitter() {
@@ -19,14 +19,14 @@ export function TransactionSplitter() {
   const [accountId, setAccountId] = useState("");
   const [settlingUpCategory, setSettlingUpCategory] =
     useState({ id: "", name: "" });
-  const [isUnapprovedTransactionsLoading, setIsUnapprovedTransactionsLoading] =
+  const [isFlaggedTransactionsLoading, setIsFlaggedTransactionsLoading] =
     useState(true);
-  const [unapprovedTransactions, setUnapprovedTransactions] =
-    useImmer([] as UnsplitTransaction[]);
-  const [unapprovedTransactionsRefreshKey, setUnapprovedTransactionsRefreshKey] =
+  const [flaggedTransactions, setFlaggedTransactions] =
+    useImmer([] as FlaggedTransaction[]);
+  const [flaggedTransactionsRefreshKey, setFlaggedTransactionsRefreshKey] =
     useImmer(0);
 
-  async function getTransactions(ynabApi: YnabApi): Promise<UnsplitTransaction[]> {
+  async function getTransactions(ynabApi: YnabApi): Promise<FlaggedTransaction[]> {
     if (!accountId) {
       return [];
     }
@@ -34,9 +34,7 @@ export function TransactionSplitter() {
     const transactionsResponse =
       await ynabApi.transactions.getTransactionsByAccount(
         "default",
-        accountId,
-        undefined,
-        "unapproved"
+        accountId
       );
 
     return transactionsResponse.data.transactions
@@ -44,22 +42,22 @@ export function TransactionSplitter() {
         !transaction.deleted &&
         (!transaction.transfer_account_id ||
           onBudgetAccounts.every((a) => transaction.transfer_account_id != a.id)) &&
-        transaction.flag_color != "green" &&
+        transaction.flag_color == "green" &&
         transaction.subtransactions.length < 2)
       .map((transaction) => {
         return {
           selected: true,
           toSplit: transaction.category_id != settlingUpCategory.id,
           ...transaction
-        } as UnsplitTransaction
+        } as FlaggedTransaction
       });
   }
 
   useYnabFetchEffect(
     getTransactions,
-    setUnapprovedTransactions,
-    setIsUnapprovedTransactionsLoading,
-    [accountId, settlingUpCategory.id, unapprovedTransactionsRefreshKey]
+    setFlaggedTransactions,
+    setIsFlaggedTransactionsLoading,
+    [accountId, settlingUpCategory.id, flaggedTransactionsRefreshKey]
   )
 
   function onTransactionSelectionChange(
@@ -67,7 +65,7 @@ export function TransactionSplitter() {
     valueName: "selected" | "toSplit",
     newValue: boolean
   ) {
-    setUnapprovedTransactions((draft) => {
+    setFlaggedTransactions((draft) => {
       const draftTransaction = draft.find(
         (t) => t.id == transactionId
       )!;
@@ -82,14 +80,14 @@ export function TransactionSplitter() {
     });
   }
 
-  function selectedTransactions(): UnsplitTransaction[] {
+  function selectedTransactions(): FlaggedTransaction[] {
     return (
-      unapprovedTransactions
+      flaggedTransactions
         .filter((t) => t.selected));
   }
 
   function transactionToSave(): TransactionDetail[] {
-    return unapprovedTransactions.map((t: UnsplitTransaction) => {
+    return flaggedTransactions.map((t: FlaggedTransaction) => {
       let transaction = t as TransactionDetail;
 
       let {
@@ -126,7 +124,7 @@ export function TransactionSplitter() {
 
       return {
         ...transaction,
-        flag_color: "green",
+        flag_color: null,
         category_id: category_id,
         category_name: category_name,
         subtransactions: subtransactions
@@ -134,9 +132,9 @@ export function TransactionSplitter() {
     });
   }
 
-  function spreadsheetTransactions(transactions: UnsplitTransaction[]): string {
+  function spreadsheetTransactions(transactions: FlaggedTransaction[]): string {
     return transactions
-      .map((t: UnsplitTransaction) => {
+      .map((t: FlaggedTransaction) => {
         let array =
           [
             t.date,
@@ -177,7 +175,7 @@ export function TransactionSplitter() {
       } as PatchTransactionsWrapper
     )
 
-    setUnapprovedTransactionsRefreshKey((draft) => draft + 1);
+    setFlaggedTransactionsRefreshKey((draft) => draft + 1);
   }
 
   function WizardHeader() {
@@ -232,12 +230,12 @@ export function TransactionSplitter() {
       return null;
     }
 
-    if (isUnapprovedTransactionsLoading) {
+    if (isFlaggedTransactionsLoading) {
       return <span>Loading...</span>
     }
 
-    if (!unapprovedTransactions.length) {
-      return <span>No unapproved transactions found for the selected account.</span>
+    if (!flaggedTransactions.length) {
+      return <span>No green-flagged transactions found for the selected account.</span>
     }
 
 
@@ -245,8 +243,8 @@ export function TransactionSplitter() {
       <Wizard
         header={<WizardHeader />}
         wrapper={<div className="flex justify-evenly w-full" />}>
-        <UnsplitTransactions
-          transactions={unapprovedTransactions}
+        <FlaggedTransactions
+          transactions={flaggedTransactions}
           onTransactionSelectionChange={onTransactionSelectionChange}
         />
         <textarea
@@ -264,8 +262,8 @@ export function TransactionSplitter() {
 
   function accountChanged(newAccountId: string) {
     setAccountId(newAccountId);
-    setIsUnapprovedTransactionsLoading(true);
-    setUnapprovedTransactionsRefreshKey(0);
+    setIsFlaggedTransactionsLoading(true);
+    setFlaggedTransactionsRefreshKey(0);
   }
 
   return (
