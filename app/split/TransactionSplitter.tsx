@@ -27,7 +27,7 @@ export function TransactionSplitter() {
     useImmer(0);
 
   async function getTransactions(ynabApi: YnabApi): Promise<FlaggedTransaction[]> {
-    if (!accountId) {
+    if (!accountId || !settlingUpCategory.id) {
       return [];
     }
 
@@ -37,20 +37,23 @@ export function TransactionSplitter() {
         accountId
       );
 
-    return transactionsResponse.data.transactions
+    const flaggedTransactions = transactionsResponse.data.transactions
       .filter((transaction) =>
         !transaction.deleted &&
+        // Only accept payments/transfers to non-tracked accounts
         (!transaction.transfer_account_id ||
           onBudgetAccounts.every((a) => transaction.transfer_account_id != a.id)) &&
-        transaction.flag_color == "green" &&
-        transaction.subtransactions.length < 2)
+        transaction.flag_color == "green")
       .map((transaction) => {
         return {
           selected: true,
-          toSplit: transaction.category_id != settlingUpCategory.id,
+          assignFullyToSettleUpCategory: transaction.category_id == settlingUpCategory.id,
+          alreadySplitInYnab: transaction.subtransactions.length > 1,
           ...transaction
         } as FlaggedTransaction
       });
+
+    return flaggedTransactions;
   }
 
   useYnabFetchEffect(
@@ -62,7 +65,7 @@ export function TransactionSplitter() {
 
   function onTransactionSelectionChange(
     transactionId: string,
-    valueName: "selected" | "toSplit",
+    valueName: string,
     newValue: boolean
   ) {
     setFlaggedTransactions((draft) => {
@@ -74,8 +77,8 @@ export function TransactionSplitter() {
         draftTransaction.selected = newValue;
       }
 
-      if (valueName == "toSplit") {
-        draftTransaction.toSplit = newValue;
+      if (valueName == "assignFullyToSettleUpCategory") {
+        draftTransaction.assignFullyToSettleUpCategory = newValue;
       }
     });
   }
@@ -86,48 +89,79 @@ export function TransactionSplitter() {
         .filter((t) => t.selected));
   }
 
-  function transactionToSave(): TransactionDetail[] {
-    return flaggedTransactions.map((t: FlaggedTransaction) => {
-      let transaction = t as TransactionDetail;
-
+  function transactionsToSave(): TransactionDetail[] {
+    return flaggedTransactions.map((transaction: FlaggedTransaction) => {
       let {
+        selected,
+        alreadySplitInYnab,
+        assignFullyToSettleUpCategory,
         id,
         category_id,
         category_name,
-        subtransactions,
+        approved
       } = transaction;
 
-      if (t.selected) {
-        if (!t.toSplit && !t.category_id) {
-          category_id = settlingUpCategory.id;
-          category_name = settlingUpCategory.name;
-        } else if (!t.toSplit) {
-          const settleUpAmount = Math.ceil(t.amount / 20) * 10;
-          const myAmount = t.amount - settleUpAmount;
+      let subtransactions: SubTransaction[] | null = null;
 
-          subtransactions = [
-            {
-              transaction_id: id,
-              category_id: settlingUpCategory.id,
-              category_name: settlingUpCategory.name,
-              amount: settleUpAmount
-            },
-            {
-              transaction_id: id,
-              category_id: category_id,
-              category_name: category_name,
-              amount: myAmount
-            },
-          ] as SubTransaction[];
+      if (selected) {
+        if (!alreadySplitInYnab && assignFullyToSettleUpCategory) {
+          if (category_id != settlingUpCategory.id) {
+            approved = false;
+            category_id = settlingUpCategory.id;
+            category_name = settlingUpCategory.name;
+          }
+        } else {
+          const settleUpAmount = Math.ceil(transaction.amount / 20) * 10;
+          const myAmount = transaction.amount - settleUpAmount;
+
+          if (alreadySplitInYnab) {
+            subtransactions = structuredClone(transaction.subtransactions);
+
+            if (subtransactions.length == 2) {
+              approved = false;
+              const settleUpSubtransaction = subtransactions
+                .find((st) => st.category_id == settlingUpCategory.id)
+
+              if (settleUpSubtransaction) {
+                settleUpSubtransaction.amount = settleUpAmount;
+
+                subtransactions
+                  .find((st) => st.category_id != settlingUpCategory.id)!
+                  .amount = myAmount;
+              }
+            }
+          } else {
+            approved = false;
+
+            subtransactions = [
+              {
+                transaction_id: id,
+                category_id: settlingUpCategory.id,
+                category_name: settlingUpCategory.name,
+                amount: settleUpAmount
+              },
+              {
+                transaction_id: id,
+                category_id: category_id,
+                category_name: category_name,
+                amount: myAmount
+              },
+            ] as SubTransaction[];
+          }
         }
       }
 
+      if (!subtransactions) {
+        subtransactions = structuredClone(transaction.subtransactions);
+      }
+
       return {
-        ...transaction,
+        ...(transaction as TransactionDetail),
         flag_color: null,
+        approved: approved,
         category_id: category_id,
         category_name: category_name,
-        subtransactions: subtransactions
+        subtransactions: structuredClone(subtransactions)
       } as TransactionDetail
     });
   }
@@ -141,17 +175,17 @@ export function TransactionSplitter() {
             t.payee_name,
           ] as (string | number | null | undefined)[];
 
-        if (t.toSplit) {
-          array.push(
-            utils.convertMilliUnitsToCurrencyAmount(-t.amount),
-            "Adam"
-          );
-        } else {
+        if (t.assignFullyToSettleUpCategory) {
           array.push(
             utils.convertMilliUnitsToCurrencyAmount(t.amount),
             "Chelsea",
             "1",
             "0"
+          );
+        } else {
+          array.push(
+            utils.convertMilliUnitsToCurrencyAmount(-t.amount),
+            "Adam"
           );
         }
 
@@ -171,7 +205,7 @@ export function TransactionSplitter() {
     await ynabApi.transactions.updateTransactions(
       "default",
       {
-        transactions: transactionToSave()
+        transactions: transactionsToSave()
       } as PatchTransactionsWrapper
     )
 
@@ -238,6 +272,7 @@ export function TransactionSplitter() {
       return <span>No green-flagged transactions found for the selected account.</span>
     }
 
+    const transactionsToSaveLocal: TransactionDetail[] = transactionsToSave();
 
     return (
       <Wizard
@@ -254,7 +289,7 @@ export function TransactionSplitter() {
           value={spreadsheetTransactionsValue}
         />
         <TransactionsToSave
-          transactions={transactionToSave()}
+          transactions={transactionsToSaveLocal}
         />
       </Wizard>
     )

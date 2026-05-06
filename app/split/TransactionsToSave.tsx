@@ -1,6 +1,5 @@
 import type { TransactionDetail } from "ynab"
 import { Table, TableCell, TableRow, Transaction } from "~/components";
-import { SplitTransaction } from "~/components/SplitTransaction";
 
 export interface TransactionsToSaveProps {
   transactions: TransactionDetail[],
@@ -27,15 +26,11 @@ export function TransactionsToSave({ transactions }: TransactionsToSaveProps) {
         {transactions.map((transaction: TransactionDetail, index: number) => {
           let className = index % 2 != 0 ? "bg-gray-900" : "";
 
-          return transaction.subtransactions.length > 1
-            ? <SplitTransaction
+          return (
+            <Transaction
               key={transaction.id}
-              value={transaction}
-              className={className} />
-            : <Transaction
-              key={transaction.id}
-              value={transaction}
-              className={className} />
+              transaction={transaction}
+              className={className} />);
         }
         )}
       </tbody>

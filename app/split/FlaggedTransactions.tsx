@@ -2,15 +2,16 @@ import type { TransactionDetail } from "ynab"
 import { Table, TableCell, TableRow, Transaction } from "~/components";
 
 export interface FlaggedTransaction extends TransactionDetail {
-  selected: boolean,
-  toSplit: boolean
+  selected: boolean;
+  assignFullyToSettleUpCategory: boolean;
+  alreadySplitInYnab: boolean;
 }
 
 export interface FlaggedTransactionsProps {
   transactions: FlaggedTransaction[],
   onTransactionSelectionChange: (
     transactionId: string,
-    valueName: "selected" | "toSplit",
+    valueName: string,
     newValue: boolean) => void
 }
 
@@ -20,6 +21,18 @@ export function FlaggedTransactions(
     onTransactionSelectionChange
   }: FlaggedTransactionsProps
 ) {
+
+  function onCheckboxOptionChange(
+    transactionId: string,
+    optionName: string,
+    newValue: boolean
+  ) {
+    onTransactionSelectionChange(
+      transactionId,
+      optionName,
+      newValue
+    );
+  }
   return (
     <Table>
       <thead>
@@ -38,34 +51,17 @@ export function FlaggedTransactions(
         {transactions.map((transaction: FlaggedTransaction, index: number) =>
           <Transaction
             key={transaction.id}
-            value={transaction}
-            className={index % 2 != 0 ? "bg-gray-900" : ""}>
-            <TableCell textAlign="center">
-              <input
-                type="checkbox"
-                name={`transaction-${transaction.id}-selected`}
-                checked={transaction.selected}
-                onChange={
-                  (e) => onTransactionSelectionChange(
-                    transaction.id,
-                    "selected",
-                    e.target.checked)}
-              />
-            </TableCell>
-            <TableCell textAlign="center">
-              {transaction.selected && !transaction.transfer_account_id &&
-                <input
-                  type="checkbox"
-                  name={`transaction-${transaction.id}-toSplit`}
-                  checked={transaction.toSplit}
-                  onChange={
-                    (e) => onTransactionSelectionChange(
-                      transaction.id,
-                      "toSplit",
-                      e.target.checked)}
-                />}
-            </TableCell>
-          </Transaction>
+            transaction={transaction}
+            className={index % 2 != 0 ? "bg-gray-900" : ""}
+            checkboxOptions={[
+              { name: "selected", checked: transaction.selected, disabled: false },
+              {
+                name: "assignFullyToSettleUpCategory",
+                checked: transaction.alreadySplitInYnab || transaction.assignFullyToSettleUpCategory,
+                disabled: transaction.alreadySplitInYnab
+              },
+            ]}
+            onCheckboxOptionChange={onCheckboxOptionChange} />
         )}
       </tbody>
     </Table>
