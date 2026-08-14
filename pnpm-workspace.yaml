@@ -2,3 +2,6 @@ allowBuilds:
   better-sqlite3: true
   esbuild: true
   msw: true
+overrides:
+  morgan: 1.11.0
+  qs: 6.15.3

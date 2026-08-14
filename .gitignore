@@ -8,3 +8,7 @@
 /build/
 data/*.sqlite*
 *.csv
+/YNAB_*_HANDOFF.md
+/coverage/
+/playwright-report/
+/test-results/

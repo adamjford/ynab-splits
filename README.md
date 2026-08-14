@@ -1,194 +1,157 @@
-# YNAB API Starter Kit
+# YNAB Splits
 
-Do you want to build a web app with the [YNAB API](https://api.ynab.com/), but are not sure how to get started?
+YNAB Splits is a private, server-rendered household ledger. Each household member connects their own YNAB account, reviews source transactions, records an integer-minor-unit split, and can prepare or post an optional settlement copy. Shared ledger facts are separate from member-owned YNAB identifiers and posting controls.
 
-Try this YNAB API Starter Kit!
+This is a stateful Node application backed by SQLite. It is not a static site and must not be deployed to GitHub Pages.
 
-Without **any** prior knowledge, it allows you to build:
+## Architecture
 
-- a web app that uses JavaScript and the [Vue.js](https://vuejs.org/) framework for its frontend,
-- makes requests to the YNAB API through OAuth,
-- and is entirely compiled on GitHub, and hosted on GitHub Pages!
+- React Router 8 with SSR enabled in `react-router.config.ts`.
+- Vite builds the browser assets and server bundle. The production server entry is `build/server/index.js` and is served by `react-router-serve`.
+- Route modules live in `app/routes/`: OAuth start/callback, onboarding and invites, dashboard, inbox, ledger, YNAB settings, and settlement workflows.
+- Server-only services in `app/services/` own OAuth, encrypted token storage, YNAB HTTP calls, settings, and request authentication.
+- `better-sqlite3` is the persistence layer. The application opens the database through `createDatabase`; migrations and integrity checks run through `pnpm db:migrate`.
+- Local money is represented as integer minor units. Conversion to YNAB integer milliunits happens only at the YNAB boundary.
 
-[![Works with YNAB](./public/works_with_ynab.svg)](https://api.ynab.com/)
+## Requirements
 
-## Live Demo
+Use the versions declared by the repository:
 
-The starter project invites a user to authorize YNAB to share information with the project, provides a choice of budget, then displays all the transactions. It's probably not very useful, but it demonstrates several key features involved in building a YNAB web app.
+- Node.js 22.22.0 or newer
+- pnpm 11.21.0
+- A YNAB OAuth application for a real connection
 
-View a [live demo](https://ynab.github.io/ynab-api-starter-kit/) of what this project will start off looking like or take a look below.
+Docker is intentionally not required or supported by the development workflow. The application is a normal Node process and can run on a small host with persistent local storage.
 
-![Screen recording on 2018-03-28 at 12:37:23](https://user-images.githubusercontent.com/759811/38046244-c9806f0a-3284-11e8-8788-509912ec79c2.gif)
-
-## Getting Started—Entirely Without Leaving Your Browser!
-
-This method does not require installing anything on your computer, and does not require any prior knowledge. It will allow you to launch a copy of this project in less than 5 minutes, that you can start modifying and learning from. (_Later, you can also edit and work on this project on your computer, of course._)
-
-### Step 1: Create your own copy of the project
-
-1. [Sign-up for a GitHub account](https://github.com/signup), if you don't already have one.
-
-2. Click [here](https://github.com/ynab/ynab-api-starter-kit/generate) to generate a repository from this template (you can read GitHub's documentation on what it means to [create a repository from a template](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template#creating-a-repository-from-a-template)).
-
-**NOTE:** In the following steps, we will assume the GitHub account you created has username `your-github-username` and that you have called your project `your-new-ynab-project`, but change these accordingly when following instructions.
-
-### Step 2: Obtain an OAuth Client ID so the app can access the YNAB API
-
-OAuth is the framework through which YNAB can share access to a user's data safely, without requiring that user share their credentials.
-
-Every YNAB app requires their own OAuth Application credentials.
-
-1. You will need a YNAB account, and [to be logged in](https://app.ynab.com/users/authentication).
-
-2. Go to the [YNAB Developer Settings](https://app.ynab.com/settings/developer)
-   and click [New Application](https://app.ynab.com/oauth/applications/new).
-
-3. The name, description, website URL and privacy policy URL are all information that will be provided to users for them to determine whether to trust your app (or not!); but these will not affect the operation of your app.
-
-   The _Redirect URI(s)_ parameter is important, as it controls where the user data can be sent. It is important to add a URL to the app, in this case:
-
-   ```
-   https://<your-github-username>.github.io/<your-new-ynab-project>/
-   ```
-
-4. Check that you acknowledge the terms of service (after reading them!), and click "Save Application."
-
-   You'll see your Client ID, Client Secret and Redirect URI(s) (you can [read more about these concepts in YNAB's documentation](https://api.ynab.com/#outh-applications)). For this project, we will be using the _Implicit Grant Flow_ and will only need the Client ID.
-
-5. Copy and paste the Client ID and URL to your app into the `src/config.json` file of the repository (you can edit them on GitHub directly):
-
-   ```json
-   {
-     "clientId": "<your client ID>",
-     "redirectUri": "https://your-github-username.github.io/your-new-ynab-project/"
-   }
-   ```
-
-**NOTE:** At this point, your app will only be able to access the YNAB API in [Restricted Mode](https://api.ynab.com/#oauth-restricted-mode): This means you can access it an unlimited number of times, but other users will only be able to authenticate a combined total of 25 times, before you will need to write api@ynab.com to reset your quota or get your app officially approved.
-
-### Step 3: Wait for GitHub Actions to deploy app to GitHub Pages
-
-When committing the change to `src/config.json` to your repository, a new compilation cycle is triggered through GitHub Actions. Typically, this should take about 2-3 minutes, afterwhich your project can be accessible from:
-
-```
-https://your-github-username.github.io/your-new-ynab-project/
-```
-
-You can also read more about how to see [the output of GitHub Actions](https://docs.github.com/en/actions/learn-github-actions/understanding-github-actions#viewing-the-activity-for-a-workflow-run).
-
-> If you get the error: Action failed with "not found deploy key or tokens" you will need to enabled read and write permissions for the github workflow. In your repository, go to Settings > Actions > General. Then scroll down to Workflow permissions. Select Read and write permissions then click Save.
-
-> If you get a 404 after deploying, you may need to configure GitHub Pages. Go into your repository Settings, then Pages, then under "Build and deployment" select "Deploy from a branch", then select the "gh-pages" branch and root folder, finally click Save.
-
-## Code Architecture of the App
-
-Now that you have a sandbox to explore the YNAB API, you will want to check out the [YNAB API Documentation](https://api.ynab.com/) for more information on what can be done.
-
-Also, although this project happens to use the [Vue.js](https://vuejs.org/) front-end framework, it is not required. Feel free to use whatever framework or libraries you prefer (popular alternatives to Vue.js include React and Angular).
-
-### [`src/App.vue`](https://github.com/ynab/ynab-api-starter-kit/blob/gh-pages/src/App.vue)
-
-In the script portion of this page, you can see how to build an OAuth URI to obtain an access token for the API.
-
-It also has some examples on retrieving budgets and transactions.
-
-### [`src/Transactions.vue`](https://github.com/ynab/ynab-api-starter-kit/blob/gh-pages/src/components/Transactions.vue)
-
-This displays all the transactions when you've got them. It also has an example of using `utils.convertMilliUnitsToCurrencyAmount` to convert the milliunits that YNAB uses into the currency format of the budget.
-
-## Local Development
-
-In order to modify and run/test this app locally, you will need to have:
-
-- the `git` version control tool (read [installation instructions](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git));
-- the most recent LTS (Long Term Support) version of Node.js, which will install the `npm` command (read [installation instructions](https://nodejs.org/en/download/)).
-
-To create a local copy of this project, you must clone your repository:
+## Local setup
 
 ```bash
-$ git clone https://github.com/your-github-username/your-new-ynab-project/
+git clone <repository-url>
+cd ynab-splits
+corepack enable
+pnpm install --frozen-lockfile
+cp .env.example .env
+pnpm db:migrate
+pnpm dev
 ```
 
-Once that copy is created, you must install the necessary modules locally:
+The development server listens on `HOST` and `PORT` (by default `0.0.0.0:3000`). Keep `.env`, SQLite files, WAL files, CSV exports, and generated handoff material out of Git. The repository's ignore rules include environment files, database files, CSVs, and `/YNAB_*_HANDOFF.md`.
+
+### Environment
+
+`.env.example` documents every required variable:
+
+- `APP_ORIGIN`: the browser-visible origin, including scheme and port, for example `http://localhost:3000`.
+- `DATABASE_PATH`: persistent SQLite path, normally under `./data/`.
+- `SESSION_SECRET`: at least 32 random UTF-8 bytes. Generate a 64-byte hexadecimal value with `openssl rand -hex 32`.
+- `TOKEN_ENCRYPTION_KEY`: exactly 32 bytes in the current raw-key format. Generate it with `openssl rand -hex 16`.
+- `YNAB_CLIENT_ID` and `YNAB_CLIENT_SECRET`: credentials from the YNAB developer console.
+- `HOST` and `PORT`: bind address and HTTP port.
+
+Do not use the sample values from `.env.example` in a running environment. Treat both secrets and the YNAB client secret as production credentials; never paste them into issues, logs, fixtures, or browser tests.
+
+### OAuth callback
+
+Register this exact callback URL in the YNAB OAuth application, using the same origin as `APP_ORIGIN`:
+
+```text
+${APP_ORIGIN}/auth/ynab/callback
+```
+
+The application uses the authorization-code flow with PKCE. It redirects to YNAB at `/oauth/authorize`, exchanges the code at `/oauth/token`, encrypts the returned tokens before storing them, and establishes an HttpOnly session cookie. A later reauthorization clears a prior disconnected marker for that user.
+
+### WSL2 and LAN access
+
+For a browser running on Windows, `http://localhost:3000` normally reaches a WSL2 development server. For another device on the mirrored/local network:
+
+1. Keep `HOST=0.0.0.0` and determine the WSL/Windows host address reachable by that device.
+2. Set `APP_ORIGIN` to the exact address and port the device uses, such as `http://192.0.2.10:3000`.
+3. Register the corresponding callback URL with YNAB.
+4. Allow the port through the host firewall if needed.
+
+The OAuth/session cookie policy derives `Secure` from HTTPS, so local HTTP remains supported for development. If YNAB or a deployment policy requires HTTPS, put native Caddy in front of the Node server with `tls internal`, trust its local CA on each client, update `APP_ORIGIN` to the HTTPS origin, and register the HTTPS callback. Do not use a public tunnel for this private application.
+
+## Application workflow
+
+1. **Connect YNAB.** Start at `/auth/ynab/start`; complete the OAuth flow and return through `/auth/ynab/callback`.
+2. **Onboard or invite.** The first member creates the household and can create a one-use invite. The second member follows `/invite/:token`, connects their own YNAB account, and joins the household.
+3. **Configure YNAB.** In `/settings/ynab`, each member chooses their own plan, source account, settlement account, currency precision, posting mode, Splitting category, and category mappings. YNAB plan/account/category IDs remain member-private.
+4. **Review the inbox.** `/inbox` filters the selected source account to eligible transactions. Review the immutable source snapshot, choose equal, percentage, or exact sharing, and decide whether a source update should be prepared. A stale or ineligible source must be reviewed again rather than blindly updated.
+5. **Use the shared ledger.** `/ledger` shows the household-safe date, description, amount, payer, and two member shares. `/ledger/:entryId` exposes owner-only manual verification and posting controls; the other member sees shared facts only.
+6. **Settle a period.** `/settlements/new` selects the inclusive date range of unsettled entries and requires acknowledgement that payment occurred. A zero-net period closes without a YNAB posting. Optional member-owned copies can be prepared in simple or detailed mode; each copy has an independent pending/succeeded/conflict/failed/skipped lifecycle.
+7. **Recover safely.** Retry only from the owner session. Pending or failed copies are reconciled by deterministic import ID and readback; a mismatch is a conflict requiring review. A closed settlement may be voided with explicit confirmation and can be restored only while its original entries remain eligible.
+
+## Database operations
+
+The application uses SQLite in WAL mode. Stop application writers before making an operational backup or restore.
 
 ```bash
-$ cd your-new-ynab-project
-$ npm install
+# Apply the ordered schema migrations to the configured database
+pnpm db:migrate
+
+# Optional maintenance with the sqlite3 CLI, while the app is stopped
+sqlite3 "$DATABASE_PATH" 'PRAGMA wal_checkpoint(TRUNCATE);'
+sqlite3 "$DATABASE_PATH" ".backup '${DATABASE_PATH}.backup'"
 ```
 
-Now you have properly set up a local environment to work on your project.
+Keep the database backup together with any WAL state until the backup has been checked. To restore, stop the server, move the current database aside, copy the reviewed backup into `DATABASE_PATH`, remove stale `-wal`/`-shm` files only when you have confirmed they belong to the replaced database, run `pnpm db:migrate`, and run the application's integrity checks before reopening traffic. Never experiment on the live operational file; use a copy first.
 
-### Launch a local preview with `npm start`
+Loss of `TOKEN_ENCRYPTION_KEY` makes stored YNAB tokens unrecoverable. Restore the matching secret from the deployment secret store or backup; otherwise remove/recreate only the affected connection and require OAuth reauthorization. Do not attempt to decrypt or print tokens manually. A disconnected connection must be reauthorized before its owner can retry YNAB work.
 
-Once your environment is configured, `npm start` will run the development server (defaults to `localhost:8080`) and watches for changes. Any modification to the source code will be updated immediately.
+## 2026 legacy importer
 
-This is useful to make a number of changes and preview them before committing the changes to the repository..
+The importer consumes the two CSV exports separately and requires an explicit household ID:
 
-### Build with `npm run build`
-
-This command builds the production assets for deployment. This will build to `dist/build.js` which the `public/index.html` will load.
-
-It is not really a command that will be useful for beginners, but it is the command that GitHub runs every time a change is made.
-
-## Alternative Methods
-
-The above method is the recommend method, because it keeps all the elements of your app in a repository, so you are not burdened by having a development environment on your computer.
-
-However there are more traditional methods of proceeding.
-
-### Cloning/forking the repository
-
-If you do not want to make your own app, just want to preview this one:
-
-1. Use `git` to clone this repository: `git clone https://github.com/ynab/ynab-api-starter-kit`
-2. From within the folder, run `npm install`
-3. Then run `npm start` to launch the local server.
-
-### Calling our `create-app` from scratch
-
-If you are an experienced developer, and just want to use this starter code for convenience, you may want to use our quick starter:
-
-1. Install [Node.js](https://nodejs.org/).
-2. In your terminal, run `npx ynab-api-starter-kit my-new-ynab-project`
-
-This will:
-
-- Create a copy of this project on your computer.
-- Install all the dependencies.
-- Start up the server ready for development.
-
-## Bonus: Using a Custom Domain Name
-
-Through this tutorial, we have been serving the app through GitHub Pages at the following URL:
-
-```
-https://your-github-username.github.io/your-new-ynab-project/
+```bash
+pnpm import:2026 -- \
+  --transactions /path/to/transactions.csv \
+  --split-view /path/to/split-view.csv \
+  --household <local-household-id>
 ```
 
-However, it is very easy to serve this app from its own custom domain name. Although this is beyond the scope of this tutorial, the steps involve:
+Without `--apply`, the command is a dry run: it parses and validates the 2026 rows and reports the period/transfer summary without writing the database. After reviewing that output, apply to a temporary or backed-up database with:
 
-1. Register a domain name, if you don't already have one (for instance with [NameCheap](https://www.namecheap.com)), we will assume it is `my-ynab-app.com`.
+```bash
+DATABASE_PATH=./data/import-test.sqlite pnpm import:2026 -- \
+  --transactions /path/to/transactions.csv \
+  --split-view /path/to/split-view.csv \
+  --household <local-household-id> \
+  --apply
+```
 
-2. Configure the DNS of the domain name to point towards GitHub's servers, [as described in GitHub's documentation](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site#configuring-an-apex-domain).
+Use representative copies first. The importer preserves recorded workbook shares and transfer values; it must not invent an adjustment for a signed mismatch. A rerun of an unchanged import is expected to be idempotent. CSV exports and handoff artifacts are user data and must remain outside Git.
 
-3. In your repository, edit the file `.github/workflows/gh-deploy.yaml` to change both occurrences of this commented out lines:
+## Quality checks
 
-   ```yaml
-   # cname: mycustomdomain.com
-   ```
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm test:coverage
+pnpm build
+pnpm test:e2e
+```
 
-   into:
+`pnpm test:e2e` uses `playwright.config.ts` and is intended for a local fake OAuth/YNAB service or a test-only server, never real YNAB credentials or a real household database. The push/pull-request workflow installs Chromium when browser tests are present and runs lint, typecheck, coverage, and the production build with frozen pnpm dependencies.
 
-   ```yaml
-   cname: my-ynab-app.com
-   ```
+For a production smoke check, build and run against a temporary database and test-only credentials:
 
-4. Edit the file `src/config.json` to likewise edit the Redirect URL to the domain name. (If you forget this step, your app will not redirect users to the right place after authorizing connection to YNAB.)
+```bash
+pnpm build
+DATABASE_PATH=./data/smoke.sqlite pnpm start
+```
 
-5. Go to the [YNAB Developer Settings](https://app.ynab.com/settings/developer), as you need to add the new Redirect URL that uses your custom domain. (If you forget this step, YNAB will not allow the redirection to your app to proceed, and will produce an error message.)
+Do not point smoke tests, importer checks, or browser tests at the operational database or a real YNAB plan.
 
-## License
+## Production operation
 
-Copyright (c) 2019 YNAB
+Build on the target Node/pnpm versions and run the generated server bundle with a persistent `DATABASE_PATH`:
 
-Licensed under the Apache-2.0 license.
+```bash
+pnpm install --frozen-lockfile
+pnpm db:migrate
+pnpm build
+pnpm start
+```
+
+Terminate writers before backup/checkpoint/restore. Monitor failed, conflicted, and pending owner postings from the application; do not resolve a conflict by repeating a remote write blindly. Preserve local audit records when remote cleanup after a void is manual. Keep HTTPS termination, firewall rules, process supervision, and secret storage outside the application process, and grant the process access only to its data directory and environment secrets.
