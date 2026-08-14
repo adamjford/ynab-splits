@@ -1,9 +1,5 @@
 import type { ButtonHTMLAttributes } from "react";
 
-export function Button({ ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      className={`basis-1 p-1 border border-solid border-gray-500 bg-gray-800 hover:bg-gray-600 focus:border-gray-400 active:bg-gray-500 ${props.className}`}
-      {...props} />
-  )
+export function Button({ className = "", type = "button", ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return <button type={type} className={`rounded border px-3 py-2 focus:outline-2 focus:outline-offset-2 focus:outline-slate-900 disabled:cursor-not-allowed disabled:opacity-50 ${className}`} {...props} />;
 }

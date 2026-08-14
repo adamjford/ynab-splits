@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS ledger_entries (
   source_plan_id TEXT,
   source_transaction_id TEXT,
   source_snapshot_hash TEXT,
+  legacy_key TEXT UNIQUE,
   voided_at TEXT,
   correction_of_id TEXT REFERENCES ledger_entries(id),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

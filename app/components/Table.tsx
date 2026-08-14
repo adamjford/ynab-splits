@@ -1,42 +1,18 @@
 import type { PropsWithChildren } from "react";
 
-interface Props extends React.PropsWithChildren {
-  className?: string
+interface Props extends PropsWithChildren { className?: string }
+
+export function Table({ className = "", children }: Props) {
+  return <div className="overflow-x-auto"><table className={`w-full border-collapse text-left ${className}`}>{children}</table></div>;
 }
 
-export function Table({ className = "", children = null }: Props) {
-  return (
-    <table className={`text-start border-collapse ${className}`}>
-      {children}
-    </table>
-  )
+export function TableRow({ className = "", children }: Props) {
+  return <tr className={`border-b last:border-0 ${className}`}>{children}</tr>;
 }
 
-export function TableRow({ className = "", children = null }: Props) {
-  return (
-    <tr className={className}>
-      {children}
-    </tr>
-  )
-}
+interface CellProps extends Props { isHeader?: boolean; textAlign?: "left" | "center" | "right" }
 
-interface CellProps extends Props {
-  isHeader?: boolean,
-  textAlign?: string
-}
-
-export function TableCell({
-  isHeader = false,
-  className = "",
-  textAlign = "start",
-  children = null
-}: CellProps) {
-  const props = {
-    className: `text-${textAlign} border-1 border-solid px-2 py-0.5 border-gray-700 ${className}`,
-    children: children
-  } as PropsWithChildren;
-
-  return isHeader
-    ? (<th {...props} />)
-    : (<td {...props} />);
+export function TableCell({ isHeader = false, className = "", textAlign = "left", children }: CellProps) {
+  const Tag = isHeader ? "th" : "td";
+  return <Tag className={`p-3 text-${textAlign} ${className}`}>{children}</Tag>;
 }

@@ -1,5 +1,2 @@
-export * from "./AccountSelect"
-export * from "./Button"
-export * from "./CategorySelect"
-export * from "./Table"
-export * from "./Transaction"
+export * from "./Button";
+export * from "./Table";
