@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocateShares, debtFor, type LedgerEntry } from "./ledger";
+import { allocateShares, assertLedgerEntry, debtFor, type LedgerEntry } from "./ledger";
 
 describe("allocateShares", () => {
   it("allocates equal odd cents to the payer", () => {
@@ -30,6 +30,62 @@ describe("allocateShares", () => {
     [{ type: "exact", otherAmountMinor: 190 }, /exact/i],
   ] as const)("rejects invalid split %j", (input, error) => {
     expect(() => allocateShares(189, "adam", "chelsea", input)).toThrow(error);
+  });
+});
+
+describe("ledger validation", () => {
+  const valid: LedgerEntry = {
+    id: "valid",
+    kind: "expense",
+    amountMinor: 10,
+    cashMemberId: "adam",
+    shares: [
+      { memberId: "adam", amountMinor: 6 },
+      { memberId: "chelsea", amountMinor: 4 },
+    ],
+    date: "2026-01-01",
+    description: "Groceries",
+  };
+
+  it.each([
+    0,
+    -1,
+    Number.MAX_SAFE_INTEGER + 1,
+    1.5,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+  ])("rejects invalid totals %s", (total) => {
+    expect(() => allocateShares(total, "adam", "chelsea", { type: "equal" })).toThrow(/positive minor-unit integer/i);
+  });
+
+  it("rejects identical member identities", () => {
+    expect(() => allocateShares(10, "adam", "adam", { type: "equal" })).toThrow(/distinct/i);
+  });
+
+  it("rejects non-integer and out-of-range percentages", () => {
+    expect(() => allocateShares(10, "adam", "chelsea", { type: "percentage", otherBasisPoints: 1.5 })).toThrow(/percentage/i);
+    expect(() => allocateShares(10, "adam", "chelsea", { type: "percentage", otherBasisPoints: Number.NaN })).toThrow(/percentage/i);
+    expect(() => allocateShares(10, "adam", "chelsea", { type: "percentage", otherBasisPoints: Number.POSITIVE_INFINITY })).toThrow(/percentage/i);
+  });
+
+  it("rejects unsafe exact shares", () => {
+    expect(() => allocateShares(10, "adam", "chelsea", { type: "exact", otherAmountMinor: Number.MAX_SAFE_INTEGER + 1 })).toThrow(/exact/i);
+    expect(() => allocateShares(10, "adam", "chelsea", { type: "exact", otherAmountMinor: 1.5 })).toThrow(/exact/i);
+  });
+
+  it("rejects debt lookup when a member or counterpart is missing", () => {
+    expect(() => debtFor(valid, "nobody")).toThrow(/exactly two distinct/i);
+    expect(() => debtFor({ ...valid, shares: [{ memberId: "adam", amountMinor: 10 }, { memberId: "adam", amountMinor: 0 }] }, "adam")).toThrow(/exactly two distinct/i);
+  });
+
+  it("validates share count, identity, total, date, and description", () => {
+    expect(() => assertLedgerEntry({ ...valid, shares: [valid.shares[0]] as unknown as LedgerEntry["shares"] })).toThrow(/exactly two/i);
+    expect(() => assertLedgerEntry({ ...valid, shares: [{ memberId: "adam", amountMinor: 5 }, { memberId: "adam", amountMinor: 5 }] })).toThrow(/exactly two/i);
+    expect(() => assertLedgerEntry({ ...valid, shares: [{ memberId: "adam", amountMinor: -1 }, { memberId: "chelsea", amountMinor: 11 }] })).toThrow(/non-negative/i);
+    expect(() => assertLedgerEntry({ ...valid, shares: [{ memberId: "adam", amountMinor: 5 }, { memberId: "chelsea", amountMinor: 6 }] })).toThrow(/sum/i);
+    expect(() => assertLedgerEntry({ ...valid, date: "01-01-2026" })).toThrow(/date/i);
+    expect(() => assertLedgerEntry({ ...valid, description: "   " })).toThrow(/date and description/i);
+    expect(() => assertLedgerEntry(valid)).not.toThrow();
   });
 });
 

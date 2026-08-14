@@ -30,6 +30,8 @@ export interface ManualSplitLine {
   memo?: string | null;
 }
 export interface ManualSplitTarget {
+  /** Optional for backwards-compatible saved targets; new callers should persist it. */
+  parentId?: string;
   parentAmountMinor: number;
   accountId: string;
   date: string;
@@ -42,6 +44,19 @@ export interface ManualVerification {
   matches: boolean;
   differences: string[];
 }
+
+function normalizedText(value: string | null | undefined): string {
+  return (value ?? "").normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase();
+}
+
+function lineTuple(line: { categoryId: string | null; amountMinor: number; payeeName?: string | null; memo?: string | null }): string {
+  return JSON.stringify([line.categoryId, line.amountMinor, normalizedText(line.payeeName), normalizedText(line.memo)]);
+}
+
+function sortedLines(lines: Array<{ categoryId: string | null; amountMinor: number; payeeName?: string | null; memo?: string | null }>): string[] {
+  return lines.map(lineTuple).sort();
+}
+
 
 export function buildManualSplitTarget(source: ManualSourceTransaction, memberShareMinor: number, ownerAllocations: OwnerAllocation[], splittingCategoryId: string): ManualSplitTarget {
   if (ownerAllocations.length === 0) throw new Error("at least one owner allocation is required");
@@ -72,13 +87,14 @@ export function buildManualSplitTarget(source: ManualSourceTransaction, memberSh
 
 export function verifyManualSplitReadback(source: ManualSourceTransaction, target: ManualSplitTarget): ManualVerification {
   const differences: string[] = [];
+  if (target.parentId !== undefined && source.id !== target.parentId) differences.push(`parent: expected ${target.parentId}, got ${source.id}`);
   if (source.amountMinor !== target.parentAmountMinor) differences.push(`parent amount: expected ${target.parentAmountMinor}, got ${source.amountMinor}`);
   if (source.accountId !== target.accountId) differences.push(`account: expected ${target.accountId}, got ${source.accountId}`);
   if (source.date !== target.date) differences.push(`date: expected ${target.date}, got ${source.date}`);
-  if (source.payeeName !== target.payeeName) differences.push(`payee: expected ${target.payeeName ?? "(none)"}, got ${source.payeeName ?? "(none)"}`);
+  if (normalizedText(source.payeeName) !== normalizedText(target.payeeName)) differences.push(`payee: expected ${target.payeeName ?? "(none)"}, got ${source.payeeName ?? "(none)"}`);
   if (source.approved !== target.approved) differences.push(`approved: expected ${target.approved}, got ${source.approved}`);
-  const expected = target.lines.map((line) => `${line.categoryId}:${line.amountMinor}`).sort();
-  const actual = source.subtransactions.map((line) => `${line.categoryId}:${line.amountMinor}`).sort();
-  if (expected.length !== actual.length || expected.some((line, index) => line !== actual[index])) differences.push(`split lines: expected ${expected.join(", ")}, got ${actual.join(", ")}`);
+  const expected = sortedLines(target.lines);
+  const actual = sortedLines(source.subtransactions);
+  if (expected.length !== actual.length || expected.some((line, index) => line !== actual[index])) differences.push("split lines differ by category, amount, payee, or memo");
   return { matches: differences.length === 0, differences };
 }

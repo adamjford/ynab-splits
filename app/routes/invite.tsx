@@ -1,9 +1,9 @@
-import { redirect } from "react-router";
 import type { Route } from "./+types/invite";
+import { secureRedirect, secureResponse } from "~/services/response.server";
 
 export function loader({ params }: Route.LoaderArgs) {
-  if (!params.token) throw new Response("Invite token is required", { status: 400 });
-  return redirect(`/auth/ynab/start?invite=${encodeURIComponent(params.token)}`);
+  if (!params.token) throw secureResponse(new Response("Invite token is required", { status: 400 }));
+  return secureRedirect(`/auth/ynab/start?invite=${encodeURIComponent(params.token)}`);
 }
 
 export default function Invite() {

@@ -56,4 +56,26 @@ describe("buildSettlementPreview", () => {
       },
     ])).toMatchObject({ netMinor: 0, direction: "settled" });
   });
+
+  it("skips voided entries before calculating debt", () => {
+    const voided: LedgerEntry = {
+      id: "voided",
+      kind: "expense",
+      amountMinor: 100,
+      cashMemberId: "adam",
+      shares: [
+        { memberId: "adam", amountMinor: 50 },
+        { memberId: "chelsea", amountMinor: 50 },
+      ],
+      date: "2026-01-04",
+      description: "Voided",
+      voidedAt: "2026-01-05T00:00:00Z",
+    };
+    expect(buildSettlementPreview("adam", [voided])).toEqual({
+      netMinor: 0,
+      direction: "settled",
+      owes: [],
+      owed: [],
+    });
+  });
 });

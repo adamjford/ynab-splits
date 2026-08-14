@@ -1,18 +1,19 @@
-import { Form, redirect } from "react-router";
+import { Form } from "react-router";
 import type { Route } from "./+types/onboarding";
 import { createHash, randomUUID } from "node:crypto";
 import { database } from "~/services/request.server";
 import { getEnv } from "~/services/env.server";
 import { readAuthUserId } from "~/services/session.server";
+import { secureData, secureRedirect } from "~/services/response.server";
 
 export async function action({ request }: Route.ActionArgs) {
   const userId = readAuthUserId(request.headers.get("Cookie"), getEnv());
-  if (!userId) throw redirect("/auth/ynab/start");
+  if (!userId) return secureRedirect("/auth/ynab/start");
   const form = await request.formData();
   const displayName = String(form.get("displayName") ?? "").trim();
   const queryInviteToken = new URL(request.url).searchParams.get("invite") ?? "";
   const inviteToken = queryInviteToken || String(form.get("inviteToken") ?? "").trim();
-  if (!displayName) return { error: "Enter a ledger display name." };
+  if (!displayName) return secureData({ error: "Enter a ledger display name." });
   const db = database();
   try {
     const transaction = db.transaction(() => {
@@ -33,9 +34,9 @@ export async function action({ request }: Route.ActionArgs) {
       db.prepare("update invites set consumed_at = CURRENT_TIMESTAMP where id = ?").run(invite.id);
     });
     transaction();
-    return redirect("/");
+    return secureRedirect("/");
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Onboarding failed" };
+    return secureData({ error: error instanceof Error ? error.message : "Onboarding failed" });
   } finally { db.close(); }
 }
 
