@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 type ActionFeedbackProps = {
   error?: string | null;
   status?: string | null;
-  focusKey?: unknown;
+  focusKey: unknown;
 };
 
 export function ActionFeedback({ error, status, focusKey }: ActionFeedbackProps): React.JSX.Element | null {
@@ -18,7 +18,7 @@ export function ActionFeedback({ error, status, focusKey }: ActionFeedbackProps)
   if (error == null && status == null) return null;
 
   return <>
-    {error != null && <p ref={errorRef} role="alert" tabIndex={-1} className="text-red-700">{error}</p>}
-    {status != null && <p ref={statusRef} role="status" tabIndex={error != null ? undefined : -1} className="text-green-700">{status}</p>}
+    {error != null && <p ref={errorRef} role="alert" tabIndex={-1} className="text-red-700 dark:text-red-400">{error}</p>}
+    {status != null && <p ref={statusRef} role="status" tabIndex={error != null ? undefined : -1} className="text-green-700 dark:text-green-400">{status}</p>}
   </>;
 }

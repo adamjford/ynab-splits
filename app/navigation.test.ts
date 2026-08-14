@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APP_DESTINATIONS, isDestinationCurrent } from "./navigation";
+import { APP_DESTINATIONS, DASHBOARD_DESTINATION, isDestinationCurrent } from "./navigation";
 
 describe("navigation destinations", () => {
   it("navigation destinations expose labels, paths, keywords, and route matching", () => {
@@ -12,21 +12,30 @@ describe("navigation destinations", () => {
       { label: "Settle up", to: "/settlements/new", keywords: ["settlement", "payment"] },
       { label: "YNAB settings", to: "/settings/ynab", keywords: ["plan", "accounts", "categories"] },
     ]);
+    expect(DASHBOARD_DESTINATION).toBe(APP_DESTINATIONS[0]);
 
     const routeCases = [
       ["Dashboard", "/", true],
+      ["Dashboard", "////", true],
       ["Dashboard", "/ledger", false],
       ["Dashboard", "/anything", false],
       ["Inbox", "/inbox", true],
+      ["Inbox", "/INBOX/", true],
       ["Inbox", "/inbox/review", false],
+      ["Inbox", "/INBOX/review/", false],
       ["Inbox", "/", false],
       ["Ledger", "/ledger", true],
+      ["Ledger", "/LEDGER/", true],
       ["Ledger", "/ledger/entry-123", true],
+      ["Ledger", "/LeDgEr/ENTRY-123///", true],
       ["Ledger", "/ledgerish", false],
+      ["Ledger", "/LEDGERISH/", false],
       ["Settle up", "/settlements/new", true],
-      ["Settle up", "/settlements/settlement-123", true],
+      ["Settle up", "/SETTLEMENTS/settlement-123///", true],
       ["Settle up", "/settlement", false],
+      ["Settle up", "/SETTLEMENT/", false],
       ["YNAB settings", "/settings/ynab", true],
+      ["YNAB settings", "/SETTINGS/YNAB/", true],
       ["YNAB settings", "/settings/ynab/accounts", false],
       ["YNAB settings", "/settings", false],
     ] as const;

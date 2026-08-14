@@ -18,6 +18,7 @@ export function QuickNavigation(): React.JSX.Element {
   const resultRefs = useRef<Array<HTMLAnchorElement | null>>([]);
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const previousPathnameRef = useRef(pathname);
 
   const dismiss = useCallback(() => {
     const dialog = dialogRef.current;
@@ -57,11 +58,19 @@ export function QuickNavigation(): React.JSX.Element {
     document.addEventListener("keydown", handleShortcut);
     return () => document.removeEventListener("keydown", handleShortcut);
   }, [openPalette]);
+  useEffect(() => {
+    const previousPathname = previousPathnameRef.current;
+    previousPathnameRef.current = pathname;
+    if (previousPathname === pathname || !dialogRef.current?.open) return;
+    restoreOpenerRef.current = false;
+    dismiss();
+  }, [dismiss, pathname]);
 
   const normalizedQuery = query.trim().toLowerCase();
   const visibleDestinations = APP_DESTINATIONS.filter((destination) => {
     if (!normalizedQuery) return true;
-    return destination.keywords.some((value) => value.toLowerCase().includes(normalizedQuery));
+    return destination.label.toLowerCase().includes(normalizedQuery)
+      || destination.keywords.some((value) => value.toLowerCase().includes(normalizedQuery));
   });
 
   const focusResult = (index: number) => {

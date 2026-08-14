@@ -3,7 +3,7 @@ import { Form, Link, Outlet, useLocation } from "react-router";
 import type { Route } from "./+types/app-layout";
 import { authenticatedUser, database } from "~/services/request.server";
 import { secureData, secureRedirect } from "~/services/response.server";
-import { APP_DESTINATIONS, isDestinationCurrent } from "~/navigation";
+import { APP_DESTINATIONS, DASHBOARD_DESTINATION, isDestinationCurrent } from "~/navigation";
 import { QuickNavigation } from "~/components/QuickNavigation";
 import { Button } from "~/components/Button";
 export function loader({ request }: Route.LoaderArgs) {
@@ -28,8 +28,8 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
     mainRef.current?.focus();
   }, [pathname]);
 
-  const dashboard = APP_DESTINATIONS[0];
-  const destinations = APP_DESTINATIONS.slice(1);
+  const dashboard = DASHBOARD_DESTINATION;
+  const destinations = APP_DESTINATIONS.filter((destination) => destination !== DASHBOARD_DESTINATION);
   const linkClass = (current: boolean) => current
     ? "inline-flex min-h-11 items-center rounded bg-slate-100 px-3 py-2 font-medium text-slate-950"
     : "inline-flex min-h-11 items-center rounded px-3 py-2 text-slate-700";

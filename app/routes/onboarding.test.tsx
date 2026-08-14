@@ -29,23 +29,35 @@ describe("onboarding action", () => {
   it("restarts OAuth instead of inserting a membership for a missing user", async () => {
     const directory = mkdtempSync(join(tmpdir(), "ynab-splits-onboarding-"));
     const databasePath = join(directory, "app.sqlite");
-    const env = stubEnvironment(databasePath);
-    const db = createDatabase(databasePath);
-    db.close();
 
-    const request = new Request("http://localhost:3000/onboarding", {
-      method: "POST",
-      headers: {
-        Cookie: createAuthCookie("missing-user", env),
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: "displayName=Adam",
-    });
-    const response = await action({ request } as never) as Response;
+    try {
+      const env = stubEnvironment(databasePath);
+      const db = createDatabase(databasePath);
+      db.close();
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/auth/ynab/start");
-    expect(response.headers.get("Set-Cookie")).toContain("Max-Age=0");
-    rmSync(directory, { recursive: true, force: true });
+      const request = new Request("http://localhost:3000/onboarding", {
+        method: "POST",
+        headers: {
+          Cookie: createAuthCookie("missing-user", env),
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: "displayName=Adam",
+      });
+      const response = await action({ request } as never) as Response;
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get("Location")).toBe("/auth/ynab/start");
+      expect(response.headers.get("Set-Cookie")).toContain("Max-Age=0");
+
+      const verificationDb = createDatabase(databasePath);
+      try {
+        expect(verificationDb.prepare("select count(*) as count from users").get()).toEqual({ count: 0 });
+        expect(verificationDb.prepare("select count(*) as count from memberships").get()).toEqual({ count: 0 });
+      } finally {
+        verificationDb.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });

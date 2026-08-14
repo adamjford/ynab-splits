@@ -66,8 +66,10 @@ test("focuses inbox feedback after keyboard save", async ({ browser, baseURL }) 
     await otherShare.press("0");
 
     const updateYnab = review.getByLabel("Update unsplit YNAB transaction");
+    await expect(updateYnab).toBeChecked();
     await updateYnab.focus();
     await updateYnab.press("Space");
+    await expect(updateYnab).not.toBeChecked();
 
     const saveButton = review.getByRole("button", { name: "Save to ledger" });
     await saveButton.focus();

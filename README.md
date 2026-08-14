@@ -81,6 +81,12 @@ The OAuth/session cookie policy derives `Secure` from HTTPS, so local HTTP remai
 6. **Settle a period.** `/settlements/new` selects the inclusive date range of unsettled entries and requires acknowledgement that payment occurred. A zero-net period closes without a YNAB posting. Optional member-owned copies can be prepared in simple or detailed mode; each copy has an independent pending/succeeded/conflict/failed/skipped lifecycle.
 7. **Recover safely.** Retry only from the owner session. Pending or failed copies are reconciled by deterministic import ID and readback; a mismatch is a conflict requiring review. A closed settlement may be voided with explicit confirmation and can be restored only while its original entries remain eligible.
 
+### Keyboard and quick navigation
+
+The authenticated shell keeps the **Navigate** control visible for pointer discovery. Activate it to open the navigation palette, then filter destinations by label or keyword and activate a result with the keyboard or pointer. The exact shortcuts are **Ctrl+K** on Windows/Linux and **Command+K** on macOS; other modifier combinations are ignored, and editable fields keep their normal shortcut behavior.
+
+Every authenticated top-level route must be registered in `APP_DESTINATIONS` (`app/navigation.ts`). The registry supplies the shell links, current-section state, and Navigate palette coverage; adding a route without registering it leaves those surfaces incomplete.
+
 ## Database operations
 
 The application uses SQLite in WAL mode. Stop application writers before making an operational backup or restore.

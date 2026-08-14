@@ -41,7 +41,7 @@ async function createSettlement(page: Page, baseURL: string): Promise<string> {
 }
 
 function dialog(page: Page) {
-  return page.locator("dialog[aria-labelledby='quick-navigation-title']");
+  return page.getByRole("dialog", { name: "Navigate", exact: true });
 }
 
 function navigationFilter(page: Page) {
@@ -99,6 +99,15 @@ test("supports skip navigation and current-section semantics", async ({ browser,
     await page.keyboard.press("Tab");
     const skip = page.getByRole("link", { name: "Skip to main content", exact: true });
     await expect(skip).toBeFocused();
+    await expect(skip).toBeVisible();
+    const skipBounds = await skip.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight };
+    });
+    expect(skipBounds.left).toBeGreaterThanOrEqual(0);
+    expect(skipBounds.top).toBeGreaterThanOrEqual(0);
+    expect(skipBounds.right).toBeLessThanOrEqual(skipBounds.viewportWidth);
+    expect(skipBounds.bottom).toBeLessThanOrEqual(skipBounds.viewportHeight);
     await page.keyboard.press("Enter");
     const main = page.locator("#main-content");
     await expect(main).toBeFocused();
@@ -165,6 +174,30 @@ test("focuses main after pathname navigation", async ({ browser, baseURL }) => {
   }
 });
 
+test("closes an open palette and focuses main across browser history navigation", async ({ browser, baseURL }) => {
+  const { context, page } = await signedInPage(browser, baseURL!);
+  try {
+    await page.getByRole("link", { name: "Ledger", exact: true }).click();
+    await expect(page).toHaveURL(/\/ledger$/);
+    await openPalette(page);
+    await navigationFilter(page).fill("stale query");
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(dialog(page)).not.toBeVisible();
+    await expect(navigationFilter(page)).not.toBeFocused();
+    await expect(page.locator("#main-content")).toBeFocused();
+
+    await page.goForward();
+    await expect(page).toHaveURL(/\/ledger$/);
+    await expect(dialog(page)).not.toBeVisible();
+    await expect(navigationFilter(page)).not.toBeFocused();
+    await expect(page.locator("#main-content")).toBeFocused();
+  } finally {
+    await context.close();
+  }
+});
+
 test("opens quick navigation by pointer and exact keyboard shortcut", async ({ browser, baseURL }) => {
   const { context, page } = await signedInPage(browser, baseURL!);
   try {
@@ -197,21 +230,24 @@ test("opens quick navigation by pointer and exact keyboard shortcut", async ({ b
     const planId = page.getByLabel("Plan ID");
     await planId.fill("unchanged-plan-id");
     await planId.focus();
-    await page.evaluate(() => {
-      (window as typeof window & { __shortcutDefaultPrevented?: boolean }).__shortcutDefaultPrevented = undefined;
+    const keyboardResult = await page.evaluate(() => {
+      let defaultPreventedAfterBubble: boolean | undefined;
       document.addEventListener("keydown", (event) => {
-        if (event.key.toLowerCase() === "k") {
-          (window as typeof window & { __shortcutDefaultPrevented?: boolean }).__shortcutDefaultPrevented = event.defaultPrevented;
-        }
-      }, { once: true, capture: true });
+        if (event.key.toLowerCase() === "k") defaultPreventedAfterBubble = event.defaultPrevented;
+      }, { once: true });
+      const dispatched = document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "k",
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      })) ?? false;
+      return { dispatched, defaultPreventedAfterBubble };
     });
-    await page.evaluate(() => {
-      document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true }));
-    });
+    expect(keyboardResult.dispatched).toBe(true);
+    expect(keyboardResult.defaultPreventedAfterBubble).toBe(false);
     await expect(dialog(page)).not.toBeVisible();
     await expect(planId).toBeFocused();
     await expect(planId).toHaveValue("unchanged-plan-id");
-    await expect.poll(() => page.evaluate(() => (window as typeof window & { __shortcutDefaultPrevented?: boolean }).__shortcutDefaultPrevented)).toBe(false);
   } finally {
     await context.close();
   }
@@ -221,8 +257,20 @@ test("filters and activates visible quick-navigation results", async ({ browser,
   const { context, page } = await signedInPage(browser, baseURL!);
   try {
     await openPalette(page);
-    await navigationFilter(page).fill("sett");
     const filteredLinks = dialog(page).getByRole("link");
+    await navigationFilter(page).fill("Inbox");
+    await expect(filteredLinks).toHaveCount(1);
+    await expect(filteredLinks.first()).toHaveText("Inbox");
+    await closePalette(page);
+
+    await openPalette(page);
+    await navigationFilter(page).fill("expenses");
+    await expect(filteredLinks).toHaveCount(1);
+    await expect(filteredLinks.first()).toHaveText("Ledger");
+    await closePalette(page);
+
+    await openPalette(page);
+    await navigationFilter(page).fill("payment");
     await expect(filteredLinks).toHaveCount(1);
     await expect(filteredLinks.first()).toHaveText("Settle up");
     await navigationFilter(page).press("Enter");
@@ -316,12 +364,10 @@ test("restores focus after palette dismissal", async ({ browser, baseURL }) => {
     await expect(dialog(page)).not.toBeVisible();
     await expect(page.locator("#main-content")).toBeFocused();
 
-    const closedDialog = dialog(page);
-    await expect(closedDialog).not.toBeVisible();
-    await expect.poll(() => closedDialog.evaluate((element) => element.contains(document.activeElement))).toBe(false);
+    await expect(dialog(page)).not.toBeVisible();
     for (let i = 0; i < 8; i += 1) {
       await page.keyboard.press("Tab");
-      await expect.poll(() => closedDialog.evaluate((element) => element.contains(document.activeElement))).toBe(false);
+      await expect.poll(() => page.evaluate(() => document.querySelector("dialog")?.contains(document.activeElement) ?? false)).toBe(false);
     }
   } finally {
     await context.close();
@@ -345,22 +391,45 @@ test("renders keyboard-visible controls without mobile overflow", async ({ brows
       await expect(control).toBeVisible();
       await expect.poll(async () => (await control.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
     }
+    await openPalette(page);
+    for (const [target, minimumHeight] of [[dialog(page), 0], [navigationFilter(page), 24]] as const) {
+      const bounds = await target.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+        };
+      });
+      expect(bounds.left).toBeGreaterThanOrEqual(0);
+      expect(bounds.top).toBeGreaterThanOrEqual(0);
+      expect(bounds.right).toBeLessThanOrEqual(bounds.viewportWidth);
+      expect(bounds.bottom).toBeLessThanOrEqual(bounds.viewportHeight);
+      expect(bounds.width).toBeGreaterThan(0);
+      expect(bounds.height).toBeGreaterThan(0);
+      expect(bounds.height).toBeGreaterThanOrEqual(minimumHeight);
+    }
+    await closePalette(page);
 
+
+    const householdLink = page.getByRole("link", { name: "Household ledger", exact: true });
     const representativeLink = page.getByRole("link", { name: "Inbox", exact: true });
+    const settingsLink = page.getByRole("link", { name: "YNAB settings", exact: true });
     const representativeButton = page.getByRole("button", { name: "Navigate", exact: true });
-    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab");
+    await householdLink.focus();
+    await householdLink.press("Tab");
     await expect(representativeLink).toBeFocused();
     const linkFocus = await focusStyle(representativeLink);
     expect(linkFocus.outlineStyle).not.toBe("none");
     expect(linkFocus.outlineWidth).toBeGreaterThanOrEqual(2);
     expect(linkFocus.outlineOffset).toBeGreaterThan(0);
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab");
+    await settingsLink.focus();
+    await settingsLink.press("Tab");
     await expect(representativeButton).toBeFocused();
     const buttonFocus = await focusStyle(representativeButton);
     expect(buttonFocus.outlineStyle).not.toBe("none");

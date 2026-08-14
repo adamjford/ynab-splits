@@ -5,11 +5,33 @@ export interface AppDestination {
   readonly matches: (pathname: string) => boolean;
 }
 
-const exact = (path: string) => (pathname: string): boolean => pathname === path;
-const nested = (path: string) => (pathname: string): boolean => pathname === path || pathname.startsWith(`${path}/`);
+const normalizePathname = (pathname: string): string => {
+  const normalized = pathname.toLowerCase().replace(/\/+$/, "");
+  return normalized || "/";
+};
+
+const exact = (path: string) => {
+  const normalizedPath = normalizePathname(path);
+  return (pathname: string): boolean => normalizePathname(pathname) === normalizedPath;
+};
+
+const nested = (path: string) => {
+  const normalizedPath = normalizePathname(path);
+  return (pathname: string): boolean => {
+    const normalizedPathname = normalizePathname(pathname);
+    return normalizedPathname === normalizedPath || normalizedPathname.startsWith(`${normalizedPath}/`);
+  };
+};
+
+export const DASHBOARD_DESTINATION = {
+  label: "Dashboard",
+  to: "/",
+  keywords: ["home", "overview"],
+  matches: exact("/"),
+} as const satisfies AppDestination;
 
 export const APP_DESTINATIONS = [
-  { label: "Dashboard", to: "/", keywords: ["home", "overview"], matches: exact("/") },
+  DASHBOARD_DESTINATION,
   { label: "Inbox", to: "/inbox", keywords: ["transactions", "review"], matches: exact("/inbox") },
   { label: "Ledger", to: "/ledger", keywords: ["entries", "expenses"], matches: nested("/ledger") },
   { label: "Settle up", to: "/settlements/new", keywords: ["settlement", "payment"], matches: nested("/settlements") },
