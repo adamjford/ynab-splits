@@ -1,10 +1,18 @@
 import { createHash, randomUUID } from "node:crypto";
+import { z } from "zod";
 import type { AppDatabase } from "../db/database.server";
 import { encryptSecret } from "./crypto.server";
 import type { AppEnv } from "./env.server";
 import type { YnabUser } from "./ynab.server";
+import { YnabTransportError } from "./ynab.server";
 
 const TOKEN_URL = "https://app.ynab.com/oauth/token";
+const OAUTH_TIMEOUT_MS = 15_000;
+const oauthTokenSchema = z.object({
+  access_token: z.string().trim().min(1),
+  refresh_token: z.string().trim().min(1),
+  expires_in: z.number().finite().int().positive(),
+});
 
 export interface OAuthTokenResponse {
   access_token: string;
@@ -27,13 +35,37 @@ export function buildAuthorizationUrl(env: AppEnv, state: string, verifier: stri
 }
 
 export async function exchangeCode(env: AppEnv, code: string, verifier: string, fetchImpl: typeof fetch = fetch): Promise<OAuthTokenResponse> {
-  const response = await fetchImpl(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ client_id: env.YNAB_CLIENT_ID, client_secret: env.YNAB_CLIENT_SECRET, redirect_uri: `${env.APP_ORIGIN}/auth/ynab/callback`, grant_type: "authorization_code", code, code_verifier: verifier }),
-  });
-  if (!response.ok) throw new Error(`YNAB authorization failed with ${response.status}`);
-  return (await response.json()) as OAuthTokenResponse;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OAUTH_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetchImpl(TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: env.YNAB_CLIENT_ID, client_secret: env.YNAB_CLIENT_SECRET, redirect_uri: `${env.APP_ORIGIN}/auth/ynab/callback`, grant_type: "authorization_code", code, code_verifier: verifier }),
+      signal: controller.signal,
+    });
+  } catch {
+    clearTimeout(timer);
+    if (controller.signal.aborted) throw new YnabTransportError("timeout");
+    throw new YnabTransportError("network");
+  }
+  try {
+    if (response.status === 401) throw new YnabTransportError("unauthorized", 401);
+    if (response.status === 429) throw new YnabTransportError("rate_limit", 429);
+    if (!response.ok) throw new YnabTransportError("http", response.status);
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      throw new YnabTransportError("malformed");
+    }
+    const parsed = oauthTokenSchema.safeParse(body);
+    if (!parsed.success) throw new YnabTransportError("malformed");
+    return parsed.data;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function persistConnection(db: AppDatabase, env: AppEnv, user: YnabUser, displayName: string, token: OAuthTokenResponse): string {

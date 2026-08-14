@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { YnabTransaction } from "./ynab.server";
 
 export interface SourceUpdateTarget {
@@ -7,24 +7,90 @@ export interface SourceUpdateTarget {
   subtransactions: Array<{ amount: number; category_id: string | null }>;
 }
 
-function snapshot(value: Pick<YnabTransaction, "id" | "date" | "amount" | "account_id" | "payee_name" | "category_id" | "approved" | "deleted" | "transfer_account_id" | "subtransactions">): string {
-  return JSON.stringify({ id: value.id, date: value.date, amount: value.amount, account_id: value.account_id, payee_name: value.payee_name ?? null, category_id: value.category_id, approved: value.approved, deleted: value.deleted, transfer_account_id: value.transfer_account_id ?? null, subtransactions: value.subtransactions.map((line) => ({ amount: line.amount, category_id: line.category_id })).sort((left, right) => `${left.category_id}:${left.amount}`.localeCompare(`${right.category_id}:${right.amount}`)) });
+export type ReviewedSource = Pick<YnabTransaction, "id" | "date" | "amount" | "account_id" | "payee_name" | "category_id" | "approved" | "deleted" | "transfer_account_id" | "subtransactions">;
+
+export interface ReviewedSnapshotClaims {
+  userId: string;
+  planId: string;
+  transactionId: string;
+  expiresAt: number;
+  snapshot: ReviewedSource;
 }
 
-export function sourceSnapshotHash(value: Parameters<typeof snapshot>[0]): string {
+function snapshot(value: ReviewedSource): string {
+  return JSON.stringify({
+    id: value.id,
+    date: value.date,
+    amount: value.amount,
+    account_id: value.account_id,
+    payee_name: value.payee_name ?? null,
+    category_id: value.category_id,
+    approved: value.approved,
+    deleted: value.deleted,
+    transfer_account_id: value.transfer_account_id ?? null,
+    subtransactions: value.subtransactions.map((line) => ({
+      id: line.id ?? null,
+      amount: line.amount,
+      category_id: line.category_id,
+      payee_name: line.payee_name ?? null,
+      memo: line.memo ?? null,
+    })).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
+  });
+}
+
+function tokenSignature(secret: string, payload: string): Buffer {
+  return createHmac("sha256", secret).update(payload).digest();
+}
+
+function encode(value: string): string {
+  return Buffer.from(value, "utf8").toString("base64url");
+}
+
+function decode(value: string): string {
+  return Buffer.from(value, "base64url").toString("utf8");
+}
+
+export function signReviewedSnapshot(secret: string, claims: ReviewedSnapshotClaims): string {
+  if (!secret || !Number.isSafeInteger(claims.expiresAt) || claims.expiresAt <= Math.floor(Date.now() / 1000)) throw new Error("invalid reviewed snapshot");
+  const payload = encode(JSON.stringify(claims));
+  return `${payload}.${tokenSignature(secret, payload).toString("base64url")}`;
+}
+
+export function verifyReviewedSnapshotToken(secret: string, token: string, expected: Pick<ReviewedSnapshotClaims, "userId" | "planId" | "transactionId">, now = Math.floor(Date.now() / 1000)): ReviewedSnapshotClaims {
+  try {
+    const [payload, encodedSignature] = token.split(".");
+    if (!payload || !encodedSignature) throw new Error("invalid reviewed snapshot");
+    const actual = Buffer.from(encodedSignature, "base64url");
+    const expectedSignature = tokenSignature(secret, payload);
+    if (actual.length !== expectedSignature.length || !timingSafeEqual(actual, expectedSignature)) throw new Error("invalid reviewed snapshot");
+    const claims = JSON.parse(decode(payload)) as ReviewedSnapshotClaims;
+    if (claims.userId !== expected.userId || claims.planId !== expected.planId || claims.transactionId !== expected.transactionId || !Number.isSafeInteger(claims.expiresAt) || claims.expiresAt <= now) throw new Error("reviewed snapshot expired or mismatched");
+    if (!claims.snapshot || claims.snapshot.id !== claims.transactionId) throw new Error("invalid reviewed snapshot");
+    return claims;
+  } catch {
+    throw new Error("reviewed snapshot is invalid or expired");
+  }
+}
+export const createReviewedSnapshotToken = signReviewedSnapshot;
+export const verifyReviewedSnapshot = verifyReviewedSnapshotToken;
+
+export function sourceSnapshotHash(value: ReviewedSource): string {
   return createHash("sha256").update(snapshot(value)).digest("hex");
 }
 
-export function verifyReviewedSource(reviewed: Parameters<typeof snapshot>[0], current: Parameters<typeof snapshot>[0]): string[] {
+export function verifyReviewedSource(reviewed: ReviewedSource, current: ReviewedSource): string[] {
   if (sourceSnapshotHash(reviewed) === sourceSnapshotHash(current)) return [];
   const differences: string[] = [];
   if (reviewed.id !== current.id) differences.push(`id: expected ${reviewed.id}, got ${current.id}`);
   if (reviewed.date !== current.date) differences.push(`date: expected ${reviewed.date}, got ${current.date}`);
   if (reviewed.amount !== current.amount) differences.push(`amount: expected ${reviewed.amount}, got ${current.amount}`);
   if (reviewed.account_id !== current.account_id) differences.push(`account: expected ${reviewed.account_id}, got ${current.account_id}`);
-  if ((reviewed.payee_name ?? null) !== (current.payee_name ?? null)) differences.push(`payee changed`);
-  if (reviewed.category_id !== current.category_id) differences.push(`category changed`);
-  if (reviewed.approved !== current.approved) differences.push(`approval changed`);
+  if ((reviewed.payee_name ?? null) !== (current.payee_name ?? null)) differences.push("payee changed");
+  if (reviewed.category_id !== current.category_id) differences.push("category changed");
+  if (reviewed.approved !== current.approved) differences.push("approval changed");
+  if (reviewed.deleted !== current.deleted) differences.push("deletion changed");
+  if ((reviewed.transfer_account_id ?? null) !== (current.transfer_account_id ?? null)) differences.push("transfer changed");
+  if (JSON.stringify(reviewed.subtransactions) !== JSON.stringify(current.subtransactions)) differences.push("subtransactions changed");
   return differences.length > 0 ? differences : ["source changed since review"];
 }
 export function verifySourceUpdate(reviewed: Parameters<typeof snapshot>[0], remote: Parameters<typeof snapshot>[0], target: SourceUpdateTarget): string[] {

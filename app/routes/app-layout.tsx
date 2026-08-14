@@ -1,13 +1,13 @@
-import { Form, NavLink, Outlet, redirect } from "react-router";
+import { Form, NavLink, Outlet } from "react-router";
 import type { Route } from "./+types/app-layout";
 import { authenticatedUser, database } from "~/services/request.server";
-
+import { secureData, secureRedirect } from "~/services/response.server";
 export function loader({ request }: Route.LoaderArgs) {
   const db = database();
   try {
-    return authenticatedUser(request, db);
+    return secureData(authenticatedUser(request, db));
   } catch (error) {
-    if (error instanceof Response && error.status === 401) throw redirect("/auth/ynab/start");
+    if (error instanceof Response && error.status === 401) throw secureRedirect("/auth/ynab/start");
     throw error;
   } finally { db.close(); }
 }

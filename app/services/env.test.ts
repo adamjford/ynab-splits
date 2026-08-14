@@ -4,8 +4,8 @@ import { parseEnv } from "./env.server";
 const valid = {
   APP_ORIGIN: "http://localhost:3000",
   DATABASE_PATH: ":memory:",
-  SESSION_SECRET: "session-secret",
-  TOKEN_ENCRYPTION_KEY: "01234567890123456789012345678901",
+  SESSION_SECRET: "session-secret-that-is-at-least-32-bytes",
+  TOKEN_ENCRYPTION_KEY: "abcdef0123456789abcdef0123456789",
   YNAB_CLIENT_ID: "client-id",
   YNAB_CLIENT_SECRET: "client-secret",
 };
