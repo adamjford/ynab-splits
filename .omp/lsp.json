@@ -1,0 +1,17 @@
+{
+  "servers": {
+    "typescript-language-server": {
+      "command": "typescript-language-server",
+      "args": ["--stdio"],
+      "fileTypes": [".ts", ".tsx", ".js", ".jsx"],
+      "rootMarkers": ["tsconfig.json", "package.json"]
+    },
+    "tailwindcss": {
+      "command": "tailwindcss-language-server",
+      "args": ["--stdio"],
+      "fileTypes": [".css"],
+      "languageId": "css",
+      "rootMarkers": ["package.json"]
+    }
+  }
+}
