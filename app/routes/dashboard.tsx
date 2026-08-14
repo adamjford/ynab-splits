@@ -1,5 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Form, Link } from "react-router";
+import { ActionFeedback } from "~/components/ActionFeedback";
+import { Button } from "~/components/Button";
 import type { Route } from "./+types/dashboard";
 import { buildSettlementPreview } from "~/domain/settlement";
 import { formatMinorUnits, type CurrencyFormat } from "~/domain/money";
@@ -90,6 +92,6 @@ export default function Dashboard({ loaderData, actionData }: Route.ComponentPro
       <article className="rounded border bg-white p-4"><p className="text-sm text-slate-500">Manual YNAB tasks</p><p className="text-2xl font-semibold">{loaderData.manualTaskCount}</p></article>
     </div>
     <div className="mt-8 rounded border bg-white p-4"><h2 className="font-semibold">Recent activity</h2><ul className="mt-3 divide-y">{loaderData.recentActivity.map((entry) => <li className="flex items-center justify-between gap-4 py-2" key={entry.id}><Link className="underline" to={`/ledger/${entry.id}`}>{entry.description}</Link><span className="text-sm text-slate-600">{displayAmount(entry.amountMinor, loaderData.currency)}</span></li>)}</ul></div>
-    <div className="mt-8 rounded border bg-white p-4"><h2 className="font-semibold">Invite the other member</h2><Form method="post" className="mt-3"><button className="rounded border px-3 py-2" name="intent" value="invite" type="submit">Create one-use invite</button></Form>{actionData?.inviteUrl && <p className="mt-3 break-all text-sm">Invite URL: {actionData.inviteUrl}</p>}</div>
+    <div className="mt-8 rounded border bg-white p-4"><h2 className="font-semibold">Invite the other member</h2><Form method="post" className="mt-3"><Button variant="secondary" name="intent" value="invite" type="submit">Create one-use invite</Button></Form><ActionFeedback status={actionData?.inviteUrl ? "Invitation created. Copy the invite URL for the other member." : null} focusKey={actionData} />{actionData?.inviteUrl && <p className="mt-3 break-all text-sm">Invite URL: {actionData.inviteUrl}</p>}</div>
   </section>;
 }

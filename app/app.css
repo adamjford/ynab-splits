@@ -13,3 +13,123 @@ body {
     color-scheme: dark;
   }
 }
+
+/*
+ * Keep interactive controls discoverable for keyboard and switch users. The
+ * selectors intentionally include native controls and explicit tabindex
+ * targets so route-level utility classes cannot remove the focus indicator.
+ */
+ :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid rgb(245 158 11);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 2px rgb(15 23 42);
+}
+
+button {
+  min-height: 44px;
+}
+
+/*
+ * Header controls stay available at narrow widths. The shell owns the flex
+ * wrapping and these rules keep every link/button a comfortable target.
+ */
+header a,
+header button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Pointer feedback is additive, so route-specific colors remain authoritative. */
+ :where(a:not([aria-current="page"])):hover {
+  text-decoration-line: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+ :where(a:not([aria-current="page"]):not([class*="bg-"])):hover,
+ :where(button:not(:disabled):not([class*="bg-"])):hover {
+  background-color: rgb(241 245 249);
+}
+
+ :where(button:not(:disabled)):hover {
+  filter: brightness(0.94);
+}
+
+ :where(button:not(:disabled)):active {
+  filter: brightness(0.86);
+}
+
+/* The dialog remains native: no custom role or focus trap is needed. */
+dialog.quick-navigation-dialog {
+  box-sizing: border-box;
+  width: min(36rem, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
+  max-height: min(80vh, 42rem);
+  margin: auto;
+  overflow: auto;
+  border: 1px solid rgb(148 163 184 / 0.6);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  color: inherit;
+  background: Canvas;
+  box-shadow: 0 1.5rem 4rem rgb(15 23 42 / 0.28);
+}
+
+dialog.quick-navigation-dialog::backdrop {
+  background: rgb(15 23 42 / 0.48);
+}
+
+/* The skip link is visually absent until it becomes the active target. */
+.skip-link {
+  position: absolute;
+  z-index: 100;
+  top: 0.5rem;
+  left: 1rem;
+  transform: translateY(-200%);
+  border-radius: 0.375rem;
+  padding: 0.625rem 0.875rem;
+  color: white;
+  background: rgb(15 23 42);
+  box-shadow: 0 0.25rem 0.75rem rgb(15 23 42 / 0.25);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+/* A checkbox's native label is the hit target, not a click-only row. */
+label:has(input[type="checkbox"]) {
+  min-height: 44px;
+  cursor: pointer;
+}
+
+label:has(input[type="checkbox"]) input[type="checkbox"] {
+  flex: 0 0 auto;
+  min-width: 1.125rem;
+  min-height: 1.125rem;
+}
+
+@media (max-width: 30rem) {
+  dialog.quick-navigation-dialog {
+    width: calc(100vw - 1rem);
+    max-width: calc(100vw - 1rem);
+  }
+}
+
+@media (forced-colors: active) {
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid ButtonText;
+    outline-offset: 3px;
+  }
+
+  dialog.quick-navigation-dialog {
+    border: 1px solid CanvasText;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(a, button) {
+    transition: none !important;
+  }
+}

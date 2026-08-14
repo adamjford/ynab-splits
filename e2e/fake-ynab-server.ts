@@ -198,20 +198,21 @@ function handleApi(request: IncomingMessage, response: ServerResponse, url: URL)
   return json(response, 404, { error: { id: "not_found", name: "Not found" } });
 }
 
-async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
-  const url = new URL(request.url ?? "/", FAKE_ORIGIN);
-  if (url.pathname === "/__health") return json(response, 200, { ok: true });
-  if (url.pathname === "/__reset" && request.method === "POST") {
-    resetState();
-    return json(response, 200, { ok: true });
-  }
-  if (url.pathname === "/__control" && request.method === "POST") {
-    const payload = await body(request);
-    const mode = payload.mode;
-    if (mode !== "success" && mode !== "unauthorized" && mode !== "rate_limit" && mode !== "timeout" && mode !== "duplicate") return json(response, 400, { error: "unsupported test control" });
-    state.control = { mode, path: typeof payload.path === "string" ? payload.path : null };
-    return json(response, 200, state.control);
-  }
+async function handle(request: IncomingMessage, response: ServerResponse, onReset?: () => void): Promise<void> {
+ const url = new URL(request.url ?? "/", FAKE_ORIGIN);
+ if (url.pathname === "/__health") return json(response, 200, { ok: true });
+ if (url.pathname === "/__reset" && request.method === "POST") {
+ resetState();
+ onReset?.();
+ return json(response, 200, { ok: true });
+ }
+ if (url.pathname === "/__control" && request.method === "POST") {
+ const payload = await body(request);
+ const mode = payload.mode;
+ if (mode !== "success" && mode !== "unauthorized" && mode !== "rate_limit" && mode !== "timeout" && mode !== "duplicate") return json(response, 400, { error: "unsupported test control" });
+ state.control = { mode, path: typeof payload.path === "string" ? payload.path : null };
+ return json(response, 200, state.control);
+ }
   if (url.pathname === "/oauth/token" && request.method === "POST") {
     const payload = await body(request);
     const code = String(payload.code ?? "");
@@ -223,8 +224,8 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
   json(response, 404, { error: "not_found" });
 }
 
-export function startFakeYnabServer(): { server: ReturnType<typeof createServer>; origin: string } {
-  const server = createServer((request, response) => { void handle(request, response).catch(() => json(response, 500, { error: "fake service failure" })); });
+export function startFakeYnabServer(onReset?: () => void): { server: ReturnType<typeof createServer>; origin: string } {
+  const server = createServer((request, response) => { void handle(request, response, onReset).catch(() => json(response, 500, { error: "fake service failure" })); });
   server.listen(FAKE_PORT, "127.0.0.1");
   return { server, origin: FAKE_ORIGIN };
 }

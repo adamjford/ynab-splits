@@ -1,9 +1,10 @@
 import { Form } from "react-router";
+import { Button } from "~/components/Button";
 import type { Route } from "./+types/onboarding";
 import { createHash, randomUUID } from "node:crypto";
 import { database } from "~/services/request.server";
 import { getEnv } from "~/services/env.server";
-import { readAuthUserId } from "~/services/session.server";
+import { clearAuthCookie, readAuthUserId } from "~/services/session.server";
 import { secureData, secureRedirect } from "~/services/response.server";
 
 export async function action({ request }: Route.ActionArgs) {
@@ -16,6 +17,10 @@ export async function action({ request }: Route.ActionArgs) {
   if (!displayName) return secureData({ error: "Enter a ledger display name." });
   const db = database();
   try {
+    const existingUser = db.prepare("select id from users where id = ?").get(userId);
+    if (!existingUser) {
+      return secureRedirect("/auth/ynab/start", { headers: { "Set-Cookie": clearAuthCookie(getEnv()) } });
+    }
     const transaction = db.transaction(() => {
       db.prepare("update users set display_name = ? where id = ?").run(displayName, userId);
       const existing = db.prepare("select household_id from memberships where user_id = ?").get(userId) as { household_id: string } | undefined;
@@ -41,5 +46,5 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Onboarding({ actionData }: Route.ComponentProps) {
-  return <main className="mx-auto max-w-xl p-6"><h1 className="text-2xl font-semibold">Set up your household</h1><p className="mt-2 text-slate-600">Choose the name the other household member will see.</p><Form method="post" className="mt-6 space-y-4"><label className="block">Ledger display name<input className="mt-1 w-full rounded border p-2" name="displayName" required /></label><label className="block">Invite token (leave blank to create the household)<input className="mt-1 w-full rounded border p-2" name="inviteToken" /></label>{actionData?.error && <p role="alert" className="text-red-700">{actionData.error}</p>}<button className="rounded bg-slate-900 px-4 py-2 text-white" type="submit">Continue</button></Form></main>;
+  return <main className="mx-auto max-w-xl p-6"><h1 className="text-2xl font-semibold">Set up your household</h1><p className="mt-2 text-slate-600">Choose the name the other household member will see.</p><Form method="post" className="mt-6 space-y-4"><label className="block">Ledger display name<input className="mt-1 w-full rounded border p-2" name="displayName" required /></label><label className="block">Invite token (leave blank to create the household)<input className="mt-1 w-full rounded border p-2" name="inviteToken" /></label>{actionData?.error && <p role="alert" className="text-red-700">{actionData.error}</p>}<Button variant="primary" type="submit">Continue</Button></Form></main>;
 }

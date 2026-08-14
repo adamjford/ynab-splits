@@ -1,4 +1,7 @@
 import { Form, Link } from "react-router";
+import { useEffect, useRef } from "react";
+import { ActionFeedback } from "~/components/ActionFeedback";
+import { Button } from "~/components/Button";
 import type { Route } from "./+types/settlement-new";
 import { buildSettlementPreview } from "~/domain/settlement";
 import { authenticatedUser, database } from "~/services/request.server";
@@ -40,7 +43,14 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function SettlementNew({ loaderData, actionData }: Route.ComponentProps) {
-  const actionError = actionData && "error" in actionData ? actionData.error : null;
-  const settlementId = actionData && "settlementId" in actionData ? actionData.settlementId : null;
-  return <section className="max-w-3xl"><h1 className="text-3xl font-semibold">Settle up</h1><p className="mt-2 text-slate-600">Select an inclusive date range. Every entry can be settled only once.</p><Form method="post" className="mt-6 space-y-4 rounded border bg-white p-4"><label>Start date<input className="mt-1 w-full rounded border p-2" type="date" name="startDate" defaultValue={loaderData.earliest} required /></label><label>End date<input className="mt-1 w-full rounded border p-2" type="date" name="endDate" defaultValue={loaderData.today} required /></label><label className="flex items-center gap-2"><input type="checkbox" name="confirmPayment" /> I confirm the real payment occurred.</label>{actionError && <p role="alert" className="text-red-700">{actionError}</p>}<button className="rounded bg-slate-900 px-4 py-2 text-white" type="submit">Create settlement</button></Form><Link className="mt-4 inline-block underline" to="/ledger">{settlementId ? "Settlement created" : "Back to ledger"}</Link></section>;
+  const result = actionData && typeof actionData === "object" ? actionData as { error?: unknown; settlementId?: unknown } : null;
+  const actionError = typeof result?.error === "string" ? result.error : null;
+  const settlementId = typeof result?.settlementId === "string" ? result.settlementId : null;
+  const settlementLinkRef = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    if (!settlementId) return;
+    const focusTimer = window.setTimeout(() => settlementLinkRef.current?.focus(), 0);
+    return () => window.clearTimeout(focusTimer);
+  }, [actionData, settlementId]);
+  return <section className="max-w-3xl"><h1 className="text-3xl font-semibold">Settle up</h1><p className="mt-2 text-slate-600">Select an inclusive date range. Every entry can be settled only once.</p><Form method="post" className="mt-6 space-y-4 rounded border bg-white p-4"><label>Start date<input className="mt-1 w-full rounded border p-2" type="date" name="startDate" defaultValue={loaderData.earliest} required /></label><label>End date<input className="mt-1 w-full rounded border p-2" type="date" name="endDate" defaultValue={loaderData.today} required /></label><label className="flex items-center gap-2"><input type="checkbox" name="confirmPayment" /> I confirm the real payment occurred.</label><ActionFeedback error={actionError} focusKey={actionData} /><Button variant="primary" type="submit">Create settlement</Button></Form>{settlementId ? <><ActionFeedback status="Settlement created." focusKey={actionData} /><Link ref={settlementLinkRef} className="mt-4 inline-block underline" to={`/settlements/${settlementId}`}>Open settlement</Link></> : <Link className="mt-4 inline-block underline" to="/ledger">Back to ledger</Link>}</section>;
 }
