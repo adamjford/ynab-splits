@@ -185,4 +185,3 @@ export function parseLegacy2026(transactionsCsv: string, splitViewCsv: string): 
   if (currentKeys.length > 0) periods.push({ entryKeys: currentKeys, calculatedNetMinor: -currentNet });
   return { rows, transfers, periods, errors };
 }
-

@@ -127,4 +127,3 @@ spacer
     expect(parseLegacy2026("Date,Name,Amount (negative if income),Paid/received by\n2026-05-01", splitView).errors.join(" ")).toMatch(/invalid amount/i);
   });
 });
-

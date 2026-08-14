@@ -311,4 +311,3 @@ export function prepareManualTask(db: AppDatabase, userId: string, taskId: strin
     db.prepare("update manual_ynab_tasks set intended_target_json = ?, last_error = null, updated_at = CURRENT_TIMESTAMP where id = ? and status = 'action_needed'").run(JSON.stringify(nextTarget), task.id);
   });
 }
- 
