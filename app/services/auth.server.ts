@@ -4,7 +4,7 @@ import { encryptSecret } from "./crypto.server";
 import type { AppEnv } from "./env.server";
 import type { YnabUser } from "./ynab.server";
 
-const TOKEN_URL = "https://app.ynab.com/oauth2/token";
+const TOKEN_URL = "https://app.ynab.com/oauth/token";
 
 export interface OAuthTokenResponse {
   access_token: string;
@@ -14,7 +14,7 @@ export interface OAuthTokenResponse {
 
 export function buildAuthorizationUrl(env: AppEnv, state: string, verifier: string): string {
   const challenge = createHash("sha256").update(verifier).digest("base64url");
-  const url = new URL("https://app.ynab.com/oauth2/authorize");
+  const url = new URL("https://app.ynab.com/oauth/authorize");
   url.search = new URLSearchParams({
     client_id: env.YNAB_CLIENT_ID,
     response_type: "code",
