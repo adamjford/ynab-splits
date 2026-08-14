@@ -44,6 +44,7 @@ export interface YnabTransaction {
   approved: boolean;
   deleted: boolean;
   transfer_account_id?: string | null;
+  import_id?: string | null;
   subtransactions: YnabSubtransaction[];
 }
 
@@ -54,6 +55,7 @@ export interface YnabGateway {
   getCategories(planId: string): Promise<YnabCategory[]>;
   getUnapprovedTransactions(planId: string): Promise<YnabTransaction[]>;
   getTransaction(planId: string, transactionId: string): Promise<YnabTransaction>;
+  findTransactionByImportId(planId: string, importId: string): Promise<YnabTransaction | null>;
   updateTransaction(planId: string, transactionId: string, target: Record<string, unknown>): Promise<YnabTransaction>;
   createTransaction(planId: string, target: Record<string, unknown>): Promise<YnabTransaction>;
 }
@@ -108,6 +110,11 @@ export class HttpYnabGateway implements YnabGateway {
 
   async getTransaction(planId: string, transactionId: string): Promise<YnabTransaction> {
     return (await this.request<YnabResponse<{ transaction: YnabTransaction }>>(`/budgets/${encodeURIComponent(planId)}/transactions/${encodeURIComponent(transactionId)}`)).data.transaction;
+  }
+
+  async findTransactionByImportId(planId: string, importId: string): Promise<YnabTransaction | null> {
+    const transactions = (await this.request<YnabResponse<{ transactions: YnabTransaction[] }>>(`/budgets/${encodeURIComponent(planId)}/transactions`)).data.transactions;
+    return transactions.find((transaction) => transaction.import_id === importId) ?? null;
   }
 
   async updateTransaction(planId: string, transactionId: string, target: Record<string, unknown>): Promise<YnabTransaction> {

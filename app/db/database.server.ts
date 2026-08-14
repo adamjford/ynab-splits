@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS ynab_transaction_decisions (
   decision TEXT NOT NULL CHECK (decision IN ('shared', 'not_shared', 'dismissed')),
   ledger_entry_id TEXT REFERENCES ledger_entries(id),
   source_snapshot_hash TEXT,
+  source_snapshot_json TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (user_id, plan_id, ynab_transaction_id)
 );
@@ -122,8 +123,10 @@ CREATE TABLE IF NOT EXISTS settlement_items (
 );
 CREATE TABLE IF NOT EXISTS ynab_postings (
   id TEXT PRIMARY KEY,
-  settlement_id TEXT NOT NULL REFERENCES settlements(id) ON DELETE CASCADE,
+  settlement_id TEXT REFERENCES settlements(id) ON DELETE CASCADE,
+  decision_id TEXT REFERENCES ynab_transaction_decisions(id) ON DELETE CASCADE,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  posting_kind TEXT NOT NULL CHECK (posting_kind IN ('settlement', 'source')),
   status TEXT NOT NULL CHECK (status IN ('pending', 'succeeded', 'conflict', 'failed', 'skipped')),
   import_id TEXT NOT NULL UNIQUE,
   intended_target_json TEXT NOT NULL,
@@ -150,5 +153,10 @@ export function createDatabase(filename: string): AppDatabase {
   db.pragma("foreign_keys = ON");
   if (filename !== ":memory:") db.pragma("journal_mode = WAL");
   db.exec(schema);
+  try {
+    db.exec("ALTER TABLE ynab_transaction_decisions ADD COLUMN source_snapshot_json TEXT");
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes("duplicate column name")) throw error;
+  }
   return db;
 }

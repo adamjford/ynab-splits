@@ -20,7 +20,7 @@ describe("savePlanSettings", () => {
     const db = setup();
     savePlanSettings(db, "u1", { planId: "p1", currencyIsoCode: "USD", currencyDecimalDigits: 2, settlementMode: "detailed" });
     db.prepare("insert into settlements (id, household_id, start_date, end_date, amount_minor, status) values ('s1', 'h1', '2026-01-01', '2026-01-02', 100, 'open')").run();
-    db.prepare("insert into ynab_postings (id, settlement_id, user_id, status, import_id, intended_target_json) values ('post1', 's1', 'u1', 'failed', 'YS:post1', '{}')").run();
+    db.prepare("insert into ynab_postings (id, settlement_id, user_id, posting_kind, status, import_id, intended_target_json) values ('post1', 's1', 'u1', 'settlement', 'failed', 'YS:post1', '{}')").run();
     expect(() => savePlanSettings(db, "u1", { planId: "p2", currencyIsoCode: "USD", currencyDecimalDigits: 2, settlementMode: "detailed" })).toThrow(/posting/i);
     db.close();
   });
