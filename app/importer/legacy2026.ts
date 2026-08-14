@@ -17,6 +17,7 @@ export interface LegacyTransfer {
   amountMinor: number;
   debtorMemberKey: "adam" | "chelsea";
   creditorMemberKey: "adam" | "chelsea";
+  /** The signed amount represented by the workbook transfer (Adam's perspective). */
   recordedNetMinor: number;
 }
 
@@ -67,6 +68,13 @@ function emptyReport(errors: string[] = []): LegacyImportReport {
   return { rows: [], transfers: [], periods: [], errors };
 }
 
+/**
+ * Parse the two workbook exports without changing their row alignment.
+ *
+ * Split View has two title rows and one blank spacer row, so source row N is
+ * represented by Split View row N+3. The amount signs are retained while
+ * calculating each period; only the persisted transfer amount is absolute.
+ */
 export function parseLegacy2026(transactionsCsv: string, splitViewCsv: string): LegacyImportReport {
   const rows: LegacyImportRow[] = [];
   const errors: string[] = [];
@@ -141,9 +149,16 @@ export function parseLegacy2026(transactionsCsv: string, splitViewCsv: string): 
       const amount = Math.abs(amountMinor);
       const debtorMemberKey = amountMinor < 0 ? payer === "adam" ? "chelsea" : "adam" : payer as "adam" | "chelsea";
       const creditorMemberKey = debtorMemberKey === "adam" ? "chelsea" : "adam";
-      const transfer: LegacyTransfer = { sourceRow, date, amountMinor: amount, debtorMemberKey, creditorMemberKey, recordedNetMinor: debtorMemberKey === "adam" ? -amount : amount };
+      // Keep the workbook's signed transfer. Do not replace it with the
+      // calculated value when the two disagree.
+      const recordedNetMinor = debtorMemberKey === "adam" ? -amount : amount;
+      const transfer: LegacyTransfer = { sourceRow, date, amountMinor: amount, debtorMemberKey, creditorMemberKey, recordedNetMinor };
       transfers.push(transfer);
-      periods.push({ entryKeys: currentKeys, calculatedNetMinor: -currentNet, transfer });
+      const calculatedNetMinor = -currentNet;
+      periods.push({ entryKeys: currentKeys, calculatedNetMinor, transfer });
+      if (calculatedNetMinor !== recordedNetMinor) {
+        errors.push(`row ${sourceRow}: calculated transfer ${calculatedNetMinor} does not match recorded transfer ${recordedNetMinor}`);
+      }
       currentKeys = [];
       currentNet = 0;
       continue;
@@ -165,6 +180,9 @@ export function parseLegacy2026(transactionsCsv: string, splitViewCsv: string): 
     currentKeys.push(row.legacyKey);
     currentNet += rowDebtForAdam(row);
   }
+  // A trailing period with no Settle Up row is intentionally open. It still
+  // belongs in the report so its entries can be imported, but has no transfer.
   if (currentKeys.length > 0) periods.push({ entryKeys: currentKeys, calculatedNetMinor: -currentNet });
   return { rows, transfers, periods, errors };
 }
+
