@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -29,25 +33,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Unit and coverage tests
-        run: pnpm test:coverage
-
-      - name: Build production bundle
-        run: pnpm build
+      - name: Audit dependencies
+        run: pnpm audit --audit-level=high
 
       - name: Install Chromium for browser tests
-        if: hashFiles('e2e/**/*.spec.ts', 'e2e/**/*.test.ts', 'e2e/**/*.spec.tsx', 'e2e/**/*.test.tsx') != ''
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Run browser tests
-        if: hashFiles('e2e/**/*.spec.ts', 'e2e/**/*.test.ts', 'e2e/**/*.spec.tsx', 'e2e/**/*.test.tsx') != ''
-        run: pnpm test:e2e
+      - name: Verify
+        run: pnpm verify
       - name: Upload browser failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4

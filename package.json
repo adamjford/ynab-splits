@@ -16,7 +16,8 @@
     "test:e2e": "playwright test",
     "typecheck": "react-router typegen && tsc --noEmit",
     "db:migrate": "tsx scripts/migrate.ts",
-    "import:2026": "tsx scripts/import-2026.ts"
+    "import:2026": "tsx scripts/import-2026.ts",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build && pnpm test:e2e"
   },
   "dependencies": {
     "@react-router/node": "8.3.0",
