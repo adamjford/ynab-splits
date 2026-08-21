@@ -65,3 +65,43 @@ decisions and evidence; do not request or expose hidden chain-of-thought.
 A change is complete only when its acceptance criteria are met, applicable checks
 pass, safety boundaries remain intact, and the result names exact verification.
 A failed check stays visible: fix the cause or report the exact blocker.
+
+## Triple-helix adoption
+
+This repository uses triple-helix development: every supported behavior is kept
+reproducible across a concise spec, executable tests, and implementation.
+
+Canonical contract locations:
+
+- `README.md` remains the application setup, operations, and safety contract.
+  Link to it rather than copying its operational policy.
+- Root `SPEC.md` records application-wide behavioral invariants and indexes the
+  system specs.
+- `app/domain/SPEC.md` records domain ledger, money, split, and settlement
+  rules.
+- `app/services/SPEC.md` records request ownership, OAuth, YNAB settings,
+  inbox orchestration, shared projections, and remote verification.
+- `app/importer/SPEC.md` records the 2026 legacy importer contract.
+
+Every canonical spec is named exactly `SPEC.md` and lives beside the
+implementation boundary that owns the behavior it documents. Do not create a
+detached `docs/spec` tree or alternate spec filenames. If a behavior spans
+boundaries, place the spec at the nearest meaningful owner or split it across
+owners, then map all cross-boundary paths.
+
+The hierarchy is `application → system → section`, with no deeper nesting.
+Each spec maps its sections to exact implementation paths and focused test
+paths. Keep the map current when files move or behavior changes.
+
+When a behavior has two helixes, derive the missing one from the other two. When
+fewer than two exist, generate in this order: spec, focused tests, then
+implementation. State observable success, failure, boundary, ownership,
+idempotency, stale/conflict, and data-integrity cases before changing code.
+
+Verify at the focused boundary first (Vitest, route/service coverage, or the
+fake-service Playwright path), then run the applicable broader check from the
+verification matrix. Documentation-only changes do not require project-wide
+validation. Preserve household ownership, member-private YNAB identifiers,
+integer minor-unit accounting, deterministic recovery, fake external services,
+and the existing prohibition on operational databases, real credentials, and
+real remote writes.
