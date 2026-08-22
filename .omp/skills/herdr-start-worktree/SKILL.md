@@ -75,13 +75,21 @@ workspace ID or interpret this failure as a Git branch problem.
    Do not add `--wait`; do not run `herdr agent wait`; do not poll pane output.
    Use `herdr agent get` only when the initial prompt itself is rejected or
    blocked, then stop and surface the block instead of answering it silently.
-7. Tell the child to work entirely in its linked checkout, commit its changes,
-   run the required checks, and report back to the parent when complete. Its
-   final handoff must state the branch, commit(s), checks and results, remaining
-   risks, and whether the checkout is clean. Use the child agent's final
-   response as the handoff; do not use `herdr notification show`, desktop
-   notifications, or any other interrupting signal because it can disrupt
-   active parent work.
+7. Tell the child workspace agent to work entirely in its linked checkout and
+   commit coherent logical increments as it works; do not let unrelated steps
+   accumulate in an uncommitted tree. Before the final handoff, it must commit
+   every remaining change, rebase its branch onto the current local `main`,
+   resolve any conflicts, rerun the applicable checks after the rebase, and
+   confirm the checkout is clean. If delegation intentionally started from a
+   non-`main` parent branch, rebase onto that exact parent branch instead
+   because the finish helper merges into it. Its final handoff must state the
+   branch, final (possibly rewritten) commit IDs, exact checks and results after
+   rebasing, remaining risks, rebase result, and whether the checkout is clean.
+   An unresolved or failed rebase is not a valid handoff; it must report the
+   blocker instead of claiming completion. Use the child workspace agent's
+   final response as the handoff; do not use `herdr notification show`,
+   desktop notifications, or any other interrupting signal because it can
+   disrupt active parent work.
 
    The parent acts only after that child report and a separate user decision to
    merge. It must not infer completion from idle/unknown terminal state.

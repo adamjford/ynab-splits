@@ -30,9 +30,13 @@ workspace ID or interpret this failure as a Git branch problem.
 
 Require all of these before proposing a merge:
 
-- the child has supplied a final handoff addressed to the parent;
-- the handoff names the branch and commits, gives exact check results, lists
-  remaining risks, and says the child checkout is clean;
+- the child workspace agent has supplied a final handoff addressed to the
+  parent;
+- the handoff names the branch and final (possibly rewritten) commit IDs, gives
+  exact check results from after the rebase, lists remaining risks, confirms
+  the branch was rebased onto the current local `main` (or the exact
+  intentionally selected non-`main` parent branch), states the rebase
+  succeeded, and says the child workspace checkout is clean;
 - the parent identifies the branch or absolute linked-worktree path;
 - the parent checkout has no unrelated uncommitted changes.
 
@@ -98,8 +102,9 @@ child panes, or inspect child-agent lifecycle state.
   `HERDR_WORKSPACE_ID`, verifies that its source checkout and the current
   repository root are the same parent checkout, and refuses to finish the
   parent workspace itself.
-- The helper refuses dirty parent or child checkouts and branches with no new
-  commits. It never stashes, resets, force-removes, pushes, or deletes data.
+- The helper refuses dirty parent or child checkouts, branches that are not
+  based on the current parent branch tip, and branches with no new commits. It
+  never stashes, resets, force-removes, pushes, or deletes data.
 - User approval is enforced by the helper's required `--approve` flag. Never
   add that flag speculatively or treat a child report as merge authorization.
 - Use Herdr for worktree creation/removal and workspace lifecycle. Do not use

@@ -129,6 +129,10 @@ target_root="$(git -C "$target_path" rev-parse --show-toplevel 2>/dev/null)" || 
 [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] || die 'parent checkout has uncommitted changes; refusing to merge'
 [[ -z "$(git -C "$target_path" status --porcelain=v1 --untracked-files=all)" ]] || die 'linked worktree has uncommitted changes; ask the child agent to commit first'
 
+# Require the child to have rebased onto the current parent branch tip.
+git merge-base --is-ancestor "$parent_branch" "$target_branch" ||
+  die "linked worktree branch is not based on latest $parent_branch; ask the child agent to rebase first"
+
 read -r parent_only branch_only <<<"$(git rev-list --left-right --count "$parent_branch...$target_branch")"
 [[ "${branch_only:-0}" =~ ^[0-9]+$ && "$branch_only" -gt 0 ]] || die "branch has no commits not already in $parent_branch: $target_branch"
 

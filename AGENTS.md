@@ -62,12 +62,21 @@ the operational database.
 - MUST use `.omp/skills/herdr-finish-worktree/SKILL.md` to finish delegated
   work. Run it from the parent repository root only after the child reports
   completion and the user explicitly approves the proposed merge.
-- The parent workspace agent MUST NOT monitor or wait on child agents. The
-  child reports its branch, commits, checks, risks, and clean-worktree state to
-  the parent before finishing.
-- Child completion MUST be reported in the child's final response or handoff,
-  not through Herdr/desktop notifications that can interrupt active parent
-  work. The parent handles that report only after its active work completes.
+- The child workspace agent MUST commit coherent logical increments as it works;
+  do not accumulate an uncommitted tree across unrelated steps.
+- Before reporting completion, the child workspace agent MUST commit all
+  remaining changes, rebase its branch onto the current local `main`, rerun
+  applicable checks after the rebase, and confirm the checkout is clean. If
+  delegation intentionally starts from a non-`main` parent branch, it instead
+  rebases onto that exact parent branch because the finish helper merges into
+  it. The child workspace agent reports its branch, final (possibly rewritten)
+  commit IDs, checks run after rebasing, risks, rebase result, and clean-worktree
+  state to the parent before finishing. An unresolved or failed rebase is not a
+  valid handoff.
+- Completion MUST be reported in the child workspace agent's final response or
+  handoff, not through Herdr/desktop notifications that can interrupt active
+  parent work. The parent handles that report only after its active work
+  completes.
 - Preserve the workspace-manager plugin's configured layout. Use Herdr
   lifecycle commands and never rely on UI focus to select the parent workspace.
 
