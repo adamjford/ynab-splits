@@ -31,18 +31,32 @@ cd ynab-splits
 corepack enable
 pnpm install --frozen-lockfile
 cp .env.example .env
-pnpm db:migrate
+DATABASE_PATH=./data/ynab-splits-development.sqlite pnpm db:migrate
 pnpm dev
 ```
 
-The development server listens on `HOST` and `PORT` (by default `0.0.0.0:3000`). Keep `.env`, SQLite files, WAL files, CSV exports, and generated handoff material out of Git. The repository's ignore rules include environment files, database files, CSVs, and `/YNAB_*_HANDOFF.md`.
+The development server listens on `HOST` and `PORT` (by default `0.0.0.0:3000`).
+Development uses `./data/ynab-splits-development.sqlite`; production must use a
+different persistent path. Keep `.env`, SQLite files, WAL files, CSV exports,
+and generated handoff material out of Git. The repository's ignore rules
+include environment files, database files, CSVs, and
+`/YNAB_*_HANDOFF.md`.
 
 ### Environment
 
-`.env.example` documents every required variable:
+`.env.example` documents the local development variables and
+`.env.production.example` documents the production variable shape. The
+required `DATABASE_PATH` must be set explicitly for each process. The importer
+reads `.env.development`/`.env` for development and `.env.production` for
+production; copy the relevant template when using file-based configuration.
+`pnpm db:migrate` does not load env files, so export `DATABASE_PATH` explicitly
+before running migrations:
+
+- Development: `./data/ynab-splits-development.sqlite`.
+- Production: a separate persistent path, for example
+  `/var/lib/ynab-splits/ynab-splits-production.sqlite`.
 
 - `APP_ORIGIN`: the browser-visible origin, including scheme and port, for example `http://localhost:3000`.
-- `DATABASE_PATH`: persistent SQLite path, normally under `./data/`.
 - `SESSION_SECRET`: at least 32 random UTF-8 bytes. Generate a 64-byte hexadecimal value with `openssl rand -hex 32`.
 - `TOKEN_ENCRYPTION_KEY`: exactly 32 bytes in the current raw-key format. Generate it with `openssl rand -hex 16`.
 - `YNAB_CLIENT_ID` and `YNAB_CLIENT_SECRET`: credentials from the YNAB developer console.
@@ -106,19 +120,43 @@ Loss of `TOKEN_ENCRYPTION_KEY` makes stored YNAB tokens unrecoverable. Restore t
 
 ## 2026 legacy importer
 
-The importer consumes the two CSV exports separately, requires an explicit household ID, and requires `DATABASE_PATH` even for dry runs:
+The importer requires `--environment` (or `--env`) with one of `dev`,
+`development`, `prod`, or `production`. It selects the database path from the
+matching environment file: development uses `.env.development` or `.env`, while
+production uses `.env.production`. If the matching file does not exist, an
+explicitly exported `DATABASE_PATH` is used as the deployment fallback. A
+present matching file without `DATABASE_PATH` fails; production never falls
+back to the development file.
+
+For a disposable development import, configure
+`.env.development` with `DATABASE_PATH=./data/import-test.sqlite` (or use
+`.env` when `.env.development` is absent), then run:
 
 ```bash
-DATABASE_PATH=./data/import-test.sqlite pnpm import:2026 -- \
+pnpm import:2026 -- \
+  --env dev \
   --transactions /path/to/transactions.csv \
   --split-view /path/to/split-view.csv \
   --household <local-household-id>
 ```
 
-Without `--apply`, the command is a dry run: it parses and validates the 2026 rows and reports the period/transfer summary without writing the database. After reviewing that output, apply to a temporary or backed-up database with:
+Without `--apply`, the command is a dry run: it parses and validates the 2026 rows and reports the period/transfer summary without writing the database. After reviewing that output, configure `.env.production` from `.env.production.example` and set its production `DATABASE_PATH`, then apply with:
 
 ```bash
-DATABASE_PATH=./data/import-test.sqlite pnpm import:2026 -- \
+pnpm import:2026 -- \
+  --environment prod \
+  --transactions /path/to/transactions.csv \
+  --split-view /path/to/split-view.csv \
+  --household <local-household-id> \
+  --apply
+```
+
+Deployments without a matching environment file may use an explicitly
+exported `DATABASE_PATH` as a fallback:
+
+```bash
+export DATABASE_PATH=/var/lib/ynab-splits/ynab-splits-production.sqlite
+pnpm import:2026 -- --environment production \
   --transactions /path/to/transactions.csv \
   --split-view /path/to/split-view.csv \
   --household <local-household-id> \
@@ -151,13 +189,22 @@ Do not point smoke tests, importer checks, or browser tests at the operational d
 
 ## Production operation
 
-Build on the target Node/pnpm versions and run the generated server bundle with a persistent `DATABASE_PATH`:
+Set the production database path explicitly in the production process
+environment. Do not reuse the development `.env` or SQLite file:
 
 ```bash
+export DATABASE_PATH=/var/lib/ynab-splits/ynab-splits-production.sqlite
 pnpm install --frozen-lockfile
 pnpm db:migrate
 pnpm build
 pnpm start
 ```
 
-Terminate writers before backup/checkpoint/restore. Monitor failed, conflicted, and pending owner postings from the application; do not resolve a conflict by repeating a remote write blindly. Preserve local audit records when remote cleanup after a void is manual. Keep HTTPS termination, firewall rules, process supervision, and secret storage outside the application process, and grant the process access only to its data directory and environment secrets.
+`pnpm db:migrate` and `pnpm start` must receive the same production
+`DATABASE_PATH`. Terminate writers before backup/checkpoint/restore. Monitor
+failed, conflicted, and pending owner postings from the application; do not
+resolve a conflict by repeating a remote write blindly. Preserve local audit
+records when remote cleanup after a void is manual. Keep HTTPS termination,
+firewall rules, process supervision, and secret storage outside the application
+process, and grant the process access only to its data directory and
+environment secrets.

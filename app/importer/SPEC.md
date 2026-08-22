@@ -40,9 +40,14 @@ safety remain in [README.md](../../README.md).
 
 ## Preflight and apply
 
+- The CLI requires `--environment` or `--env` with one of `dev`,
+  `development`, `prod`, or `production`. It selects `DATABASE_PATH` from the
+  matching `.env.development`/`.env` or `.env.production` file. If no matching
+  file exists, an explicitly injected `DATABASE_PATH` is accepted as the
+  deployment fallback; a present matching file without `DATABASE_PATH` is an
+  error. Production never falls back to the development file.
 - Preflight is a dry-run classification of deterministic entries, shares,
-  settlements, and import items. It does not write the database. The CLI dry-run
-  opens only `DATABASE_PATH` (or the explicitly configured test database), runs
+  settlements, and import items. It does not write the database. The CLI runs
   preflight for the requested household, reports insert/skip/conflict counts,
   closes the database, and never applies writes. Parse errors are reported
   before opening a database.

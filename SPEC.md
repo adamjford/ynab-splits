@@ -65,6 +65,12 @@ deployment, backup, credentials, and operational safety remain in
   calls, and SQLite access remain server-side in the SSR Node application.
   Browser code does not hold OAuth tokens or provide a compatibility path for
   the removed prototype surface.
+- Application and migration processes receive an explicit `DATABASE_PATH`.
+  The importer requires a development or production environment name and
+  resolves the selected path from its matching environment file or an
+  explicitly injected fallback.
+- Development and production paths are separate; the application does not infer
+  or silently share a database between them.
 - The supported development and production process is the repository's Node
   and pnpm workflow with persistent SQLite storage. Operational setup,
   callback registration, backups, and credentials remain specified in

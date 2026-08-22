@@ -18,4 +18,8 @@ describe("parseEnv", () => {
   it("rejects missing required secrets", () => {
     expect(() => parseEnv({ ...valid, SESSION_SECRET: "" })).toThrow(/SESSION_SECRET/i);
   });
+
+  it("requires an explicitly selected database path", () => {
+    expect(() => parseEnv({ ...valid, DATABASE_PATH: undefined })).toThrow(/DATABASE_PATH/i);
+  });
 });

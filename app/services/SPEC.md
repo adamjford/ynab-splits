@@ -7,6 +7,19 @@ read-back outcomes. Domain allocation and settlement value rules are in
 [../../SPEC.md](../../SPEC.md). Operational setup, callback registration,
 secrets, and safety policy remain in [README.md](../../README.md).
 
+## Runtime database path
+
+- Application and migration processes use the explicit `DATABASE_PATH` supplied
+  by their runtime environment.
+- The importer requires an environment name and selects `DATABASE_PATH` from
+  the matching `.env.development`/`.env` or `.env.production` file. It accepts
+  an externally supplied `DATABASE_PATH` only when no matching file exists.
+- Development and production use different SQLite paths. The development
+  example uses `./data/ynab-splits-development.sqlite`; production uses a
+  separately configured persistent path such as
+  `/var/lib/ynab-splits/ynab-splits-production.sqlite`.
+- No process silently falls back to an ambiguous shared database path.
+
 ## OAuth and member-owned YNAB connections
 
 - OAuth uses authorization code plus PKCE. The callback accepts only a matching,
@@ -124,6 +137,8 @@ secrets, and safety policy remain in [README.md](../../README.md).
 | Gateway transport, settlement IDs, and exact read-back | `app/services/ynab.server.ts`, `app/services/ynab-verification.server.ts`, `app/services/inbox-orchestration.server.ts`, `app/domain/settlement-posting.ts`, `app/routes/settlement-detail.tsx` | `app/services/ynab-verification.test.ts`, `app/services/inbox-orchestration.test.ts`, `app/domain/settlement-posting.test.ts`, `e2e/fake-ynab-server.ts`, `e2e/action-feedback.spec.ts` |
 | Onboarding, source updates, and manual verification | `app/routes/onboarding.tsx`, `app/routes/invite.tsx`, `app/services/inbox-orchestration.server.ts`, `app/services/ynab-verification.server.ts` | `app/routes/onboarding.test.tsx`, `app/services/inbox-orchestration.test.ts`, `app/services/ynab-verification.test.ts`, `e2e/app.spec.ts` |
 | Settlement posting, owner recovery, void, and restore | `app/routes/settlement-detail.tsx`, `app/domain/settlement-posting.ts`, `app/services/ynab-verification.server.ts` | `app/domain/settlement-posting.test.ts`, `app/services/ynab-verification.test.ts`, `e2e/app.spec.ts`, `e2e/settlement-interactions.spec.ts` |
+
+| Runtime database selection and migration safety | `app/services/env.server.ts`, `app/services/request.server.ts`, `scripts/migrate.ts`, `scripts/import-2026.ts` | `app/services/env.test.ts`, `app/importer/legacy2026-apply.test.ts` |
 
 The dedicated auth tests exercise the injected OAuth transport and encrypted
 connection persistence without contacting real external services.

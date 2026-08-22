@@ -1,6 +1,7 @@
 .DS_Store
 .env*
 !.env.example
+!.env.production.example
 /node_modules/
 
 # React Router

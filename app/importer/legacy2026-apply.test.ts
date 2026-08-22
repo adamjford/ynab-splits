@@ -234,18 +234,35 @@ describe("legacy 2026 atomic apply", () => {
     const splitPath = join(directory, "split.csv");
     writeFileSync(transactionsPath, "Date,Name,Amount (negative if income),Paid/received by\n2026-01-01,Amazon,18.89,Adam\n");
     writeFileSync(splitPath, "ignored\nignored\nDate,Name,Amount,payer,x,x,x,x,x,x,x,Paid/received by amount,x,Adam,Chelsea\nspacer\n2026-01-01,Amazon,18.89,Adam,,,,,,,,9.44,,9.45,9.44\n");
-    const run = (path: string, extra: string[] = []) => spawnSync(
-      process.execPath,
-      [join(process.cwd(), "node_modules/tsx/dist/cli.mjs"), join(process.cwd(), "scripts/import-2026.ts"), "--transactions", transactionsPath, "--split-view", splitPath, "--household", "h1", ...extra],
-      { encoding: "utf8", env: { ...process.env, DATABASE_PATH: path } },
-    );
-    const first = run(databasePath);
+    const run = (path?: string, extra: string[] = [], environment = "development", configuredPath: string | null | undefined = path, flag = "--environment") => {
+      const env = { ...process.env };
+      if (path) env.DATABASE_PATH = path;
+      else delete env.DATABASE_PATH;
+      const cwd = mkdtempSync(join(tmpdir(), "ynab-import-cli-"));
+      paths.push(cwd);
+      if (configuredPath) {
+        const filename = environment === "production" || environment === "prod" ? ".env.production" : ".env.development";
+        writeFileSync(join(cwd, filename), `DATABASE_PATH=${configuredPath}\n`);
+      }
+      return spawnSync(
+        process.execPath,
+        [join(process.cwd(), "node_modules/tsx/dist/cli.mjs"), join(process.cwd(), "scripts/import-2026.ts"), flag, environment, "--transactions", transactionsPath, "--split-view", splitPath, "--household", "h1", ...extra],
+        { encoding: "utf8", cwd, env },
+      );
+    };
+    const first = run(databasePath, [], "dev", databasePath, "--env");
     expect(first.status).toBe(0);
     expect(JSON.parse(first.stdout).preflight).toMatchObject({
       insert: { entries: 1, shares: 2, settlements: 0, items: 0 },
       exactSkip: { entries: 0, shares: 0, settlements: 0, items: 0 },
       immutableConflict: { entries: 0, shares: 0, settlements: 0, items: 0 },
     });
+    expect(JSON.parse(first.stdout)).toMatchObject({ environment: "development" });
+    const selectedConfigPath = join(directory, "selected-config.sqlite");
+    const selectedConfig = run(databasePath, [], "dev", selectedConfigPath, "--env");
+    expect(selectedConfig.status).not.toBe(0);
+    expect(selectedConfig.stderr).toMatch(/database|file/i);
+    expect(existsSync(selectedConfigPath)).toBe(false);
     const afterFirst = createDatabase(databasePath);
     expect(afterFirst.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 0 });
     afterFirst.close();
@@ -258,11 +275,27 @@ describe("legacy 2026 atomic apply", () => {
     const afterSecond = createDatabase(databasePath);
     expect(afterSecond.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 1 });
     afterSecond.close();
+    const productionEnvironment = run(databasePath, [], "prod");
+    expect(productionEnvironment.status).toBe(0);
+    expect(JSON.parse(productionEnvironment.stdout)).toMatchObject({ environment: "production" });
+    const productionAlias = run(databasePath, [], "production", databasePath, "--env");
+    expect(productionAlias.status).toBe(0);
+    expect(JSON.parse(productionAlias.stdout)).toMatchObject({ environment: "production" });
+    const productionExternal = run(databasePath, [], "production", null);
+    expect(productionExternal.status).toBe(0);
     const absentPath = join(directory, "absent.sqlite");
     const absent = run(absentPath);
     expect(absent.status).not.toBe(0);
     expect(absent.stderr).toMatch(/database|file/i);
     expect(existsSync(absentPath)).toBe(false);
+
+    const invalidEnvironment = run(databasePath, [], "staging");
+    expect(invalidEnvironment.status).not.toBe(0);
+    expect(invalidEnvironment.stderr).toMatch(/dev\|development\|prod\|production/);
+
+    const missingPath = run(undefined, ["--apply"], "production");
+    expect(missingPath.status).not.toBe(0);
+    expect(missingPath.stderr).toMatch(/DATABASE_PATH.*production/i);
 
     const parseErrorPath = join(directory, "parse-error.sqlite");
     writeFileSync(transactionsPath, "Date,Name\n\"unterminated");
