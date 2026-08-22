@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createDatabase, type AppDatabase } from "../db/database.server";
 import type { YnabGateway, YnabTransaction } from "./ynab.server";
 import { verifyManualSplitReadback } from "../domain/manual-split";
@@ -41,12 +41,19 @@ const splitTransaction: YnabTransaction = { ...transaction, subtransactions: [
 
 describe("inbox review orchestration", () => {
   it("requires an unexpired token bound to the reviewed user and source", async () => {
-    const db = setup();
-    const token = reviewToken("review-secret", user, settings, transaction, 60);
-    await expect(saveInboxDecision({ db, user, settings, gateway, transaction: { ...transaction, payee_name: "Changed" }, decision: "not_shared", split: { type: "equal" }, updateYnab: false, categoryId: null, reviewToken: token, reviewSecret: "review-secret" })).rejects.toThrow(/changed|review/i);
-    expect(db.prepare("select count(*) as count from ynab_transaction_decisions").get()).toEqual({ count: 0 });
-    await expect(saveInboxDecision({ db, user: { ...user, id: "u2", memberKey: "chelsea" }, settings, gateway, transaction, decision: "not_shared", split: { type: "equal" }, updateYnab: false, categoryId: null, reviewToken: token, reviewSecret: "review-secret" })).rejects.toThrow(/invalid|expired|mismatch/i);
-    db.close();
+    vi.useFakeTimers();
+    try {
+      const db = setup();
+      const token = reviewToken("review-secret", user, settings, transaction, 60);
+      await expect(saveInboxDecision({ db, user, settings, gateway, transaction: { ...transaction, payee_name: "Changed" }, decision: "not_shared", split: { type: "equal" }, updateYnab: false, categoryId: null, reviewToken: token, reviewSecret: "review-secret" })).rejects.toThrow(/changed|review/i);
+      await expect(saveInboxDecision({ db, user: { ...user, id: "u2", memberKey: "chelsea" }, settings, gateway, transaction, decision: "not_shared", split: { type: "equal" }, updateYnab: false, categoryId: null, reviewToken: token, reviewSecret: "review-secret" })).rejects.toThrow(/invalid|expired|mismatch/i);
+      await expect(saveInboxDecision({ db, user, settings: { ...settings, planId: "p2" }, gateway, transaction, decision: "not_shared", split: { type: "equal" }, updateYnab: false, categoryId: null, reviewToken: token, reviewSecret: "review-secret" })).rejects.toThrow(/invalid|expired|mismatch/i);
+      vi.advanceTimersByTime(61_000);
+      await expect(saveInboxDecision({ db, user, settings, gateway, transaction, decision: "not_shared", split: { type: "equal" }, updateYnab: false, categoryId: null, reviewToken: token, reviewSecret: "review-secret" })).rejects.toThrow(/expired|invalid|mismatch/i);
+      db.close();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("persists a not-shared decision transactionally and prevents duplicate review", async () => {
@@ -54,6 +61,10 @@ describe("inbox review orchestration", () => {
     const token = reviewToken("review-secret", user, settings, transaction, 60);
     await expect(saveInboxDecision({ db, user, settings, gateway, transaction, decision: "not_shared", split: { type: "equal" }, updateYnab: false, categoryId: null, reviewToken: token, reviewSecret: "review-secret" })).resolves.toEqual({ saved: true });
     expect(db.prepare("select decision from ynab_transaction_decisions").get()).toEqual({ decision: "not_shared" });
+    const otherUser: TestUser = { id: "u2", householdId: "h1", memberKey: "chelsea" };
+    const otherToken = reviewToken("review-secret", otherUser, settings, transaction, 60);
+    await expect(saveInboxDecision({ db, user: otherUser, settings, gateway, transaction, decision: "not_shared", split: { type: "equal" }, updateYnab: false, categoryId: null, reviewToken: otherToken, reviewSecret: "review-secret" })).resolves.toEqual({ saved: true });
+    expect(db.prepare("select count(*) as count from ynab_transaction_decisions").get()).toEqual({ count: 2 });
     await expect(saveInboxDecision({ db, user, settings, gateway, transaction, decision: "not_shared", split: { type: "equal" }, updateYnab: false, categoryId: null, reviewToken: token, reviewSecret: "review-secret" })).rejects.toThrow(/unique|reviewed/i);
     db.close();
   });
@@ -86,6 +97,31 @@ describe("inbox review orchestration", () => {
     expect(db.prepare("select amount_minor from ledger_shares where member_key = 'chelsea'").get()).toEqual({ amount_minor: 944 });
     db.close();
   });
+  it("rejects malformed source dates and blank payees before writing a ledger parent", async () => {
+    const invalidTransactions: YnabTransaction[] = [
+      { ...transaction, date: "2026-02-30" },
+      { ...transaction, payee_name: "" },
+    ];
+    for (const invalidTransaction of invalidTransactions) {
+      const db = setup();
+      const token = reviewToken("review-secret", user, settings, invalidTransaction, 60);
+      await expect(saveInboxDecision({ db, user, settings, gateway, transaction: invalidTransaction, decision: "shared", split: { type: "equal" }, updateYnab: false, categoryId: null, reviewToken: token, reviewSecret: "review-secret" })).rejects.toThrow(/date and description/i);
+      expect(db.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 0 });
+      db.close();
+    }
+  });
+
+  it("rejects malformed corrective dates and blank descriptions before replacement insert", () => {
+    for (const invalidInput of [{ date: "2026-02-30", description: "corrected" }, { date: "2026-01-02", description: " " }]) {
+      const db = setup();
+      db.exec("insert into ledger_entries (id, household_id, kind, amount_minor, cash_member_key, entry_date, description) values ('e1', 'h1', 'expense', 100, 'adam', '2026-01-01', 'x'); insert into ledger_shares values ('e1', 'adam', 50), ('e1', 'chelsea', 50);");
+      expect(() => correctLedgerEntry(db, "h1", "e1", { amountMinor: 100, cashMemberKey: "adam", kind: "expense", ...invalidInput, shares: [{ memberKey: "adam", amountMinor: 50 }, { memberKey: "chelsea", amountMinor: 50 }] })).toThrow(/date and description/i);
+      expect(db.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 1 });
+      expect(db.prepare("select voided_at from ledger_entries where id = 'e1'").get()).toEqual({ voided_at: null });
+      db.close();
+    }
+  });
+
   it("requires both actual and Splitting categories for a YNAB update", async () => {
     const db = setup();
     const token = reviewToken("review-secret", user, settings, transaction, 60);
@@ -140,6 +176,15 @@ describe("inbox review orchestration", () => {
     expect(db.prepare("select voided_at from ledger_entries where id = 'e1'").get()).toMatchObject({ voided_at: expect.any(String) });
     db.close();
   });
+  it("rejects corrective cash-member mismatches and unsafe share sums", () => {
+    const db = setup();
+    db.exec("insert into ledger_entries (id, household_id, kind, amount_minor, cash_member_key, entry_date, description) values ('e1', 'h1', 'expense', 100, 'adam', '2026-01-01', 'x'); insert into ledger_shares values ('e1', 'adam', 50), ('e1', 'chelsea', 50);");
+    const mismatchedShares = [{ memberKey: "chelsea", amountMinor: 50 }, { memberKey: "other", amountMinor: 50 }] as unknown as Parameters<typeof correctLedgerEntry>[3]["shares"];
+    expect(() => correctLedgerEntry(db, "h1", "e1", { amountMinor: 100, cashMemberKey: "adam", kind: "expense", date: "2026-01-02", description: "corrected", shares: mismatchedShares })).toThrow(/member|share/i);
+    expect(() => correctLedgerEntry(db, "h1", "e1", { amountMinor: Number.MAX_SAFE_INTEGER, cashMemberKey: "adam", kind: "expense", date: "2026-01-02", description: "corrected", shares: [{ memberKey: "adam", amountMinor: Number.MAX_SAFE_INTEGER }, { memberKey: "chelsea", amountMinor: 1 }] })).toThrow(/shares/i);
+    expect(db.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 1 });
+    db.close();
+  });
   it("classifies every source update outcome without losing local state", async () => {
     const updateSettings = { ...settings, splittingCategoryId: "splitting" };
     const updated: YnabTransaction = { ...transaction, category_id: null, approved: true, subtransactions: [
@@ -184,6 +229,8 @@ describe("inbox review orchestration", () => {
     insertDecision(db);
     db.prepare("insert into manual_ynab_tasks (id, decision_id, status, intended_target_json) values ('m1', 'd1', 'action_needed', ?)").run(JSON.stringify(target));
     expect(verifyManualSplitReadback({ id: remote.id, amountMinor: remote.amount / 10, accountId: remote.account_id, date: remote.date, payeeName: remote.payee_name, approved: remote.approved, subtransactions: remote.subtransactions.map((line) => ({ categoryId: line.category_id, amountMinor: line.amount / 10, payeeName: line.payee_name, memo: line.memo })) }, target)).toEqual({ matches: true, differences: [] });
+    expect(await verifyManualTask(db, "u2", "m1", gateway, 2)).toMatchObject({ verified: false, error: expect.stringMatching(/not actionable|owned/i) });
+    expect(() => dismissManualTask(db, "u2", "m1")).toThrow(/not found|owned|resolved/i);
     const verification = await verifyManualTask(db, user.id, "m1", { ...gateway, getTransaction: async () => remote }, 2);
     expect(verification).toEqual({ verified: true });
     expect(() => dismissManualTask(db, user.id, "m1")).toThrow(/already resolved/i);
@@ -213,6 +260,7 @@ describe("inbox review orchestration", () => {
       const taskGateway = remote ? { ...gateway, getTransaction: async () => remote } : { ...gateway, getTransaction: async () => { throw new Error("offline"); } };
       const result = await verifyManualTask(db, user.id, "m1", taskGateway, 2);
       expect(result).toMatchObject({ verified: false });
+      if (remote) expect(db.prepare("select status from manual_ynab_tasks where id = 'm1'").get()).toEqual({ status: "action_needed" });
       if (remote) expect(db.prepare("select last_error from manual_ynab_tasks where id = 'm1'").get()).toMatchObject({ last_error: expect.any(String) });
       db.close();
     }
@@ -229,6 +277,9 @@ describe("inbox review orchestration", () => {
       { status: "pending", gateway: { ...gateway, getTransaction: async () => transaction, updateTransaction: async () => updated }, expected: "succeeded" },
       { status: "pending", gateway: { ...gateway, getTransaction: async () => transaction, updateTransaction: async () => ({ ...updated, approved: false }) }, expected: "conflict" },
       { status: "pending", gateway: { ...gateway, getTransaction: async () => { throw { kind: "unauthorized" }; } }, expected: "failed" },
+      { status: "pending", gateway: { ...gateway, getTransaction: async () => { throw { kind: "rate_limit" }; } }, expected: "failed" },
+      { status: "pending", gateway: { ...gateway, getTransaction: async () => { throw { kind: "malformed" }; } }, expected: "failed" },
+      { status: "pending", gateway: { ...gateway, getTransaction: async () => { throw { kind: "timeout" }; } }, expected: "pending" },
     ];
     for (const scenario of scenarios) {
       const db = setup();
@@ -240,6 +291,7 @@ describe("inbox review orchestration", () => {
     const db = setup();
     expect(await retrySourcePosting(db, user.id, "missing", gateway)).toMatchObject({ status: "missing" });
     insertPosting(db, "p2", "pending");
+    expect(await retrySourcePosting(db, "u2", "p2", gateway)).toMatchObject({ status: "missing" });
     db.prepare("update ynab_transaction_decisions set source_snapshot_json = null where id = 'd1'").run();
     expect(await retrySourcePosting(db, user.id, "p2", gateway)).toMatchObject({ status: "conflict" });
     db.close();

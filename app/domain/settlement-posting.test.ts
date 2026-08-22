@@ -11,6 +11,38 @@ describe("buildSettlementTarget", () => {
   it("builds Adam's detailed Option Two shape", () => {
     expect(buildSettlementTarget("adam", entries, "detailed", "splitting")).toEqual({ parentAmountMinor: 319, payee: "Chelsea", categoryId: null, subtransactions: [{ amountMinor: -625, categoryId: "hospital", memo: "YS:parking" }, { amountMinor: 944, categoryId: "splitting", memo: "YS:aggregate" }] });
   });
+  it("ignores voided entries in detailed totals and subtransactions", () => {
+    const voided: LedgerEntry = {
+      ...entries[1],
+      id: "voided",
+      voidedAt: "2026-01-03",
+      shares: [{ memberId: "chelsea", amountMinor: 0 }, { memberId: "adam", amountMinor: 100 }],
+      amountMinor: 100,
+    };
+    expect(buildSettlementTarget("adam", [...entries, voided], "detailed", "splitting")).toEqual({
+      parentAmountMinor: 319,
+      payee: "Chelsea",
+      categoryId: null,
+      subtransactions: [{ amountMinor: -625, categoryId: "hospital", memo: "YS:parking" }, { amountMinor: 944, categoryId: "splitting", memo: "YS:aggregate" }],
+    });
+  });
+
+  it("keeps voided-only detailed periods at zero without subtransactions", () => {
+    const voided: LedgerEntry = {
+      ...entries[1],
+      id: "voided-only",
+      voidedAt: "2026-01-03",
+      shares: [{ memberId: "chelsea", amountMinor: 0 }, { memberId: "adam", amountMinor: 100 }],
+      amountMinor: 100,
+    };
+    expect(buildSettlementTarget("adam", [voided], "detailed", "splitting")).toEqual({
+      parentAmountMinor: 0,
+      payee: "Chelsea",
+      categoryId: null,
+      subtransactions: [],
+    });
+  });
+
 
   it("builds a simple whole transfer", () => {
     expect(buildSettlementTarget("chelsea", entries, "simple", "splitting")).toMatchObject({ parentAmountMinor: -319, categoryId: "splitting", subtransactions: [] });

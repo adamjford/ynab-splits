@@ -1,6 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type BrowserContext } from "@playwright/test";
 import { FAKE_ORIGIN } from "./fake-ynab-server";
-import { configurePlan, newContext, resetFakeYnab, signIn, waitForHydration } from "./test-helpers";
+import { configurePlan, installFakeOAuth, newContext, resetFakeYnab, signIn, waitForHydration } from "./test-helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -33,6 +33,108 @@ test("onboards both identities with isolated cookies and an invite", async ({ br
 
   await adam.close();
   await chelsea.close();
+});
+
+test("redirects unauthenticated and pending sessions at the authenticated shell", async ({ browser, baseURL }) => {
+  const context = await newContext(browser);
+  const page = await context.newPage();
+  try {
+    await resetFakeYnab(page);
+
+    const unauthenticated = await page.request.get(`${baseURL}/ledger`, { maxRedirects: 0 });
+    expect(unauthenticated.status()).toBe(302);
+    expect(unauthenticated.headers().location).toBe("/auth/ynab/start");
+
+    await installFakeOAuth(page, "adam");
+    await page.goto("/auth/ynab/start");
+    await waitForHydration(page);
+    await expect(page).toHaveURL(/\/onboarding$/);
+
+    const pending = await page.request.get(`${baseURL}/ledger`, { maxRedirects: 0 });
+    expect(pending.status()).toBe(302);
+    expect(pending.headers().location).toBe("/onboarding");
+
+    await page.getByLabel("Ledger display name").fill("Adam");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
+test("keeps owner-private ledger controls out of the other member's detail view", async ({ browser, baseURL }) => {
+  const adam = await newContext(browser);
+  const adamPage = await adam.newPage();
+  let chelsea: BrowserContext | undefined;
+  try {
+    await resetFakeYnab(adamPage);
+    await signIn(adamPage, "adam", "Adam", baseURL!);
+    await configurePlan(adamPage, "adam");
+
+    const sourceUpdate = await adamPage.request.put(`${FAKE_ORIGIN}/v1/plans/fake-plan-adam/transactions/fake-transaction-adam-1`, {
+      headers: { Authorization: "Bearer fake-access-adam" },
+      data: {
+        transaction: {
+          subtransactions: [
+            { amount: -9440, category_id: "fake-category-groceries-adam", payee_name: "Local market", memo: "Owner share" },
+            { amount: -9450, category_id: "fake-category-splitting-adam", payee_name: "Local market", memo: "Household share" },
+          ],
+        },
+      },
+    });
+    expect(sourceUpdate.ok()).toBeTruthy();
+
+    await adamPage.goto("/inbox");
+    await waitForHydration(adamPage);
+    const review = adamPage.getByRole("article").filter({ hasText: "Local market" });
+    await review.getByLabel("Split type").selectOption("exact");
+    await review.getByLabel("Other share (minor units)").fill("945");
+    await review.getByLabel("Update unsplit YNAB transaction").uncheck();
+    await review.getByRole("button", { name: "Save to ledger" }).click();
+    await expect(adamPage.getByText("No unapproved transactions require review.")).toBeVisible();
+
+    await adamPage.goto("/ledger");
+    await waitForHydration(adamPage);
+    const entryLink = adamPage.getByRole("link", { name: "Local market", exact: true });
+    const entryPath = await entryLink.getAttribute("href");
+    expect(entryPath).toMatch(/^\/ledger\/[^/]+$/);
+    const entryId = entryPath!.split("/").pop()!;
+
+    await adamPage.goto("/");
+    await adamPage.getByRole("button", { name: "Create one-use invite" }).click();
+    const inviteText = await adamPage.getByText(/Invite URL:/).textContent();
+    const inviteUrl = new URL(inviteText!.replace(/^.*Invite URL:\s*/, ""), baseURL);
+
+    await adamPage.goto(`/ledger/${entryId}`);
+    await waitForHydration(adamPage);
+    await expect(adamPage.getByRole("heading", { name: "Manual YNAB steps" })).toBeVisible();
+    await expect(adamPage.getByRole("button", { name: "Verify" })).toBeVisible();
+    await expect(adamPage.getByRole("button", { name: "Dismiss" })).toBeVisible();
+
+    await adamPage.locator('input[name="taskId"]').last().evaluate((element) => {
+      (element as HTMLInputElement).value = "forged-task-id";
+    });
+    await adamPage.getByRole("button", { name: "Dismiss" }).click();
+    await expect(adamPage.getByRole("alert")).toHaveText("Verification failed.");
+    await expect(adamPage.getByRole("heading", { name: "Manual YNAB steps" })).toBeVisible();
+
+    chelsea = await newContext(browser);
+    const chelseaPage = await chelsea.newPage();
+    await signIn(chelseaPage, "chelsea", "Chelsea", baseURL!, `${inviteUrl.pathname}${inviteUrl.search}`);
+    await configurePlan(chelseaPage, "chelsea");
+    await chelseaPage.goto(`/ledger/${entryId}`);
+    await waitForHydration(chelseaPage);
+    await expect(chelseaPage.getByRole("heading", { name: "Local market" })).toBeVisible();
+    await expect(chelseaPage.getByRole("heading", { name: "Manual YNAB steps" })).toHaveCount(0);
+    await expect(chelseaPage.getByRole("button", { name: "Verify" })).toHaveCount(0);
+    await expect(chelseaPage.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
+    await expect(chelseaPage.getByRole("button", { name: "Save allocation guidance" })).toHaveCount(0);
+    await expect(chelseaPage.locator("body")).not.toContainText("fake-transaction-adam-1");
+  } finally {
+    await chelsea?.close();
+    await adam.close();
+  }
 });
 
 test("reviews an inbox transaction, creates a zero-net settlement, and restores it", async ({ browser, baseURL }) => {

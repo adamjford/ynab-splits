@@ -15,6 +15,13 @@ describe("parseLegacy2026", () => {
       shares: { adam: 945, chelsea: 944 },
     })]);
   });
+  it("normalizes embedded-whitespace headers and preserves BOM/CRLF row alignment", () => {
+    const source = "\uFEFFDate,Name,Amount (negative if income),Paid/received by\r\n2025-12-31,Old,10.00,Adam\r\n2026-01-01,Amazon,18.89,Adam\r\n";
+    const split = "ignored\r\nignored\r\n Date , Name , Amount , payer , x , x , x , x , x , x , x , Paid/received   by amount , x , Adam , Chelsea \r\nspacer\r\n2025-12-31,Old,10.00,Adam,,,,,,,,5,,5,5\r\n2026-01-01,Amazon,18.89,Adam,,,,,,,,9.44,,9.45,9.44\r\n";
+    const report = parseLegacy2026(source, split);
+    expect(report.errors).toEqual([]);
+    expect(report.rows).toEqual([expect.objectContaining({ legacyKey: "sheet-2026:3", sourceRow: 3 })]);
+  });
 
   it("reports row identity mismatches without producing rows", () => {
     expect(parseLegacy2026(transactions.replace("Amazon", "Wrong"), splitView).errors.join(" ")).toMatch(/identity|name/i);
@@ -49,6 +56,25 @@ describe("parseLegacy2026", () => {
     expect(parseLegacy2026(transactions, splitView.split("\n").slice(0, 4).join("\n")).errors.join(" ")).toMatch(/missing Split View row/i);
     expect(parseLegacy2026(transactions, splitView.replace("2026-01-01,Amazon", "2026-01-02,Amazon")).errors.join(" ")).toMatch(/identity mismatch/i);
   });
+  it("rejects blank descriptions before pairing rows", () => {
+    const report = parseLegacy2026(transactions.replace("Amazon", "   "), splitView.replace("Amazon", "   "));
+    expect(report.rows).toEqual([]);
+    expect(report.errors.join(" ")).toMatch(/blank.*description|description.*blank/i);
+  });
+
+  it("rejects zero totals at the parser boundary", () => {
+    const report = parseLegacy2026(
+      "Date,Name,Amount (negative if income),Paid/received by\n2026-01-01,Valid,$0.00,Adam",
+      `ignored
+ignored
+Date,Name,Amount,payer,x,x,x,x,x,x,x,Paid/received by amount,x,Adam,Chelsea
+spacer
+2026-01-01,Valid,$0.00,Adam,,,,,,,,0,,0,0`,
+    );
+    expect(report.rows).toEqual([]);
+    expect(report.errors.join(" ")).toMatch(/amount|positive/i);
+  });
+
 
   it("parses signed income and currency amounts while filtering other years", () => {
     const source = `Date,Name,Amount (negative if income),Paid/received by
@@ -125,5 +151,68 @@ spacer
     expect(report.transfers[0]).toMatchObject({ debtorMemberKey: "chelsea", creditorMemberKey: "adam" });
     expect(report.errors).toEqual([]);
     expect(parseLegacy2026("Date,Name,Amount (negative if income),Paid/received by\n2026-05-01", splitView).errors.join(" ")).toMatch(/invalid amount/i);
+  });
+  it("rejects malformed 2026 calendar dates while skipping other years", () => {
+    const source = `Date,Name,Amount (negative if income),Paid/received by
+2025-12-31,Old,10.00,Adam
+2026-02-29,Not a leap day,10.00,Adam
+2026-12-31,Valid,10.00,Adam`;
+    const split = `ignored
+ignored
+Date,Name,Amount,payer,x,x,x,x,x,x,x,Paid/received by amount,x,Adam,Chelsea
+spacer
+2025-12-31,Old,10.00,Adam,,,,,,,,5,,5,5
+2026-02-29,Not a leap day,10.00,Adam,,,,,,,,5,,5,5
+2026-12-31,Valid,10.00,Adam,,,,,,,,5,,5,5`;
+    const report = parseLegacy2026(source, split);
+    expect(report.rows).toEqual([expect.objectContaining({ legacyKey: "sheet-2026:4", description: "Valid" })]);
+    expect(report.errors.join(" ")).toMatch(/calendar date/i);
+  });
+
+  it("enforces the two-decimal amount grammar at parser boundaries", () => {
+    const splitFor = (name: string, amount: string) => {
+      const csvAmount = JSON.stringify(amount);
+      return `ignored
+ignored
+Date,Name,Amount,payer,x,x,x,x,x,x,x,Paid/received by amount,x,Adam,Chelsea
+spacer
+2026-01-01,${name},${csvAmount},Adam,,,,,,,,0,,0,0`;
+    };
+    const zero = parseLegacy2026(
+      "Date,Name,Amount (negative if income),Paid/received by\n2026-01-01,Valid,$0.00,Adam",
+      splitFor("Valid", "$0.00"),
+    );
+    expect(zero.rows).toEqual([]);
+    expect(zero.errors.join(" ")).toMatch(/amount|positive/i);
+    for (const amount of ["+1.00", ".50", "1.", "1.234", "$1$00", "$-1", "1,2", "90071992547410.00"]) {
+      const report = parseLegacy2026(
+        `Date,Name,Amount (negative if income),Paid/received by\n2026-01-01,Bad,${JSON.stringify(amount)},Adam`,
+        splitFor("Bad", amount),
+      );
+      expect(report.rows).toEqual([]);
+      expect(report.errors.join(" ")).toMatch(/invalid amount/i);
+    }
+  });
+
+  it("treats case-insensitive transfer rows as period boundaries, including empty periods", () => {
+    const source = `Date,Name,Amount (negative if income),Paid/received by
+2026-01-01,settle UP,5.00,Adam
+2026-01-02,Expense,10.00,Adam
+2026-01-03,SETTLE UP,-5.00,Adam
+2026-01-04,After,10.00,Chelsea`;
+    const split = `ignored
+ignored
+Date,Name,Amount,payer,x,x,x,x,x,x,x,Paid/received by amount,x,Adam,Chelsea
+spacer
+2026-01-01,settle UP,5.00,Adam,,,,,,,,5,,5,0
+2026-01-02,Expense,10.00,Adam,,,,,,,,5,,5,5
+2026-01-03,SETTLE UP,5.00,Adam,,,,,,,,5,,5,0
+2026-01-04,After,10.00,Chelsea,,,,,,,,5,,5,5`;
+    const report = parseLegacy2026(source, split);
+    expect(report.errors.join(" ")).toMatch(/calculated transfer/i);
+    expect(report.periods).toHaveLength(3);
+    expect(report.periods[0]).toMatchObject({ entryKeys: [], transfer: expect.anything() });
+    expect(report.periods[1]).toMatchObject({ entryKeys: ["sheet-2026:3"], transfer: expect.anything() });
+    expect(report.periods[2]).toMatchObject({ entryKeys: ["sheet-2026:5"] });
   });
 });

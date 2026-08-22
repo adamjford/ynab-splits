@@ -16,11 +16,17 @@ safety remain in [README.md](../../README.md).
   must match exactly on date, name, signed amount magnitude, and payer. Missing
   rows, malformed amounts, unsupported payer names, identity mismatches, and
   counterparty shares above the total are reported without producing a row.
-- Only dates beginning with the supported 2026 period are accepted. Positive
-  workbook amounts become expenses; negative amounts become income. The
-  counterparty share is taken from the absolute Split View amount and the
-  remainder stays with the payer or recipient. Each ordinary row receives the
-  deterministic key `sheet-2026:<source-row>`.
+- Blank descriptions are rejected before a ledger row is produced or applied.
+- Dates outside 2026 are ignored; dates beginning with `2026-` must also be
+  valid `YYYY-MM-DD` calendar dates. Positive workbook amounts become expenses;
+  negative amounts become income. The counterparty share is taken from the
+  absolute Split View amount and the remainder stays with the payer or
+  recipient. Each ordinary row receives the deterministic key
+  `sheet-2026:<source-row>`.
+- Amounts may include a leading `$` and commas, and may have zero, one, or
+  two fractional digits; other amount forms are invalid. Non-positive or
+  unsafe minor-unit totals are rejected before a ledger row is produced or
+  applied.
 
 ## Historical transfers and periods
 
@@ -35,7 +41,11 @@ safety remain in [README.md](../../README.md).
 ## Preflight and apply
 
 - Preflight is a dry-run classification of deterministic entries, shares,
-  settlements, and import items. It does not write the database.
+  settlements, and import items. It does not write the database. The CLI dry-run
+  opens only `DATABASE_PATH` (or the explicitly configured test database), runs
+  preflight for the requested household, reports insert/skip/conflict counts,
+  closes the database, and never applies writes. Parse errors are reported
+  before opening a database.
 - Apply is atomic. An immutable conflict blocks all writes; matching existing
   units are skipped; an unchanged rerun is idempotent.
 
@@ -55,4 +65,4 @@ safety remain in [README.md](../../README.md).
 | Contract section | Implementation | Focused evidence |
 | --- | --- | --- |
 | CSV parsing, row alignment, and 2026 validation | `app/importer/legacy2026.ts` | `app/importer/legacy2026.test.ts` |
-| Atomic preflight, apply, idempotency, and immutable conflicts | `app/importer/legacy2026-apply.server.ts`, `scripts/import-2026.ts` | `app/importer/legacy2026-apply.test.ts` |
+| Atomic preflight, apply, CLI dry-run, idempotency, and immutable conflicts | `app/importer/legacy2026-apply.server.ts`, `scripts/import-2026.ts` | `app/importer/legacy2026-apply.test.ts` |

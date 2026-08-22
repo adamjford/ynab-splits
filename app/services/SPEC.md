@@ -117,7 +117,7 @@ secrets, and safety policy remain in [README.md](../../README.md).
 | Contract section | Implementation | Focused evidence |
 | --- | --- | --- |
 | Request authentication, sessions, and ownership | `app/services/request.server.ts`, `app/services/session.server.ts` | `app/services/request.server.test.ts`, `e2e/app.spec.ts` |
-| PKCE URL, token exchange, encrypted connection persistence | `app/services/auth.server.ts`, `app/routes/auth.start.tsx`, `app/routes/auth.callback.tsx`, `app/services/crypto.server.ts` | `app/services/crypto.test.ts`, `e2e/app.spec.ts`, `e2e/fake-ynab-server.ts` |
+| PKCE URL, token exchange, encrypted connection persistence | `app/services/auth.server.ts`, `app/routes/auth.start.tsx`, `app/routes/auth.callback.tsx`, `app/services/crypto.server.ts` | `app/services/auth.test.ts`, `app/services/crypto.test.ts`, `e2e/app.spec.ts`, `e2e/fake-ynab-server.ts` |
 | Member-owned settings and plan validation | `app/services/settings.server.ts`, `app/routes/settings-ynab.tsx`, `app/services/ynab-user.server.ts` | `app/services/settings.test.ts`, `e2e/app.spec.ts`, `e2e/action-feedback.spec.ts` |
 | Inbox review, source snapshots, manual tasks, and recovery | `app/services/inbox-orchestration.server.ts`, `app/services/ynab-verification.server.ts` | `app/services/inbox-orchestration.test.ts`, `app/services/ynab-verification.test.ts`, `e2e/action-feedback.spec.ts` |
 | Shared ledger query and ownership projection | `app/services/ledger-query.server.ts`, `app/routes/ledger.tsx`, `app/routes/ledger-entry.tsx` | `app/services/ledger-query.test.ts`, `e2e/app.spec.ts`, `e2e/navigation.spec.ts` |
@@ -125,5 +125,5 @@ secrets, and safety policy remain in [README.md](../../README.md).
 | Onboarding, source updates, and manual verification | `app/routes/onboarding.tsx`, `app/routes/invite.tsx`, `app/services/inbox-orchestration.server.ts`, `app/services/ynab-verification.server.ts` | `app/routes/onboarding.test.tsx`, `app/services/inbox-orchestration.test.ts`, `app/services/ynab-verification.test.ts`, `e2e/app.spec.ts` |
 | Settlement posting, owner recovery, void, and restore | `app/routes/settlement-detail.tsx`, `app/domain/settlement-posting.ts`, `app/services/ynab-verification.server.ts` | `app/domain/settlement-posting.test.ts`, `app/services/ynab-verification.test.ts`, `e2e/app.spec.ts`, `e2e/settlement-interactions.spec.ts` |
 
-The repository has no dedicated `auth.server.ts` unit test; browser coverage and
-crypto tests are the current evidence for that boundary.
+The dedicated auth tests exercise the injected OAuth transport and encrypted
+connection persistence without contacting real external services.

@@ -157,6 +157,8 @@ describe("ordered SQLite migrations and ledger invariants", () => {
     const reopened = new Database(filename);
     expect(reopened.open).toBe(true);
     expect(reopened.prepare("select version from schema_migrations order by version").all()).toEqual([{ version: 1 }, { version: 2 }]);
+    expect(reopened.prepare("select name from sqlite_master where type = 'table' and name like '%_legacy'").all()).toEqual([]);
+    expect(reopened.prepare("select name from sqlite_master where type = 'index' and name = 'one_active_settlement_item'").all()).toEqual([]);
     reopened.close();
   });
 

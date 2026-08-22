@@ -187,20 +187,43 @@ function assertLegacyShape(db: Database.Database, withSnapshot: boolean): void {
 }
 export function validateLedgerInvariants(db: Database.Database): void {
   const rows = db.prepare(`
-    SELECT e.id, e.amount_minor, s.member_key, s.amount_minor AS share_minor
+    SELECT e.id, e.amount_minor, e.cash_member_key, s.member_key, s.amount_minor AS share_minor
     FROM ledger_entries e
     LEFT JOIN ledger_shares s ON s.entry_id = e.id
     ORDER BY e.id, s.member_key
-  `).all() as Array<{ id: string; amount_minor: number; member_key: "adam" | "chelsea" | null; share_minor: number | null }>;
-  const grouped = new Map<string, { amount: number; shares: Array<{ member: string; amount: number }> }>();
+  `).all() as Array<{
+    id: string;
+    amount_minor: number;
+    cash_member_key: string;
+    member_key: "adam" | "chelsea" | null;
+    share_minor: number | null;
+  }>;
+  const grouped = new Map<
+    string,
+    { amount: number; cashMember: string; shares: Array<{ member: string; amount: number }> }
+  >();
   for (const row of rows) {
-    const item = grouped.get(row.id) ?? { amount: row.amount_minor, shares: [] };
+    const item = grouped.get(row.id) ?? { amount: row.amount_minor, cashMember: row.cash_member_key, shares: [] };
     if (row.member_key !== null) item.shares.push({ member: row.member_key, amount: row.share_minor as number });
     grouped.set(row.id, item);
   }
   for (const [id, item] of grouped) {
     const members = item.shares.map((share) => share.member).sort();
-    if (members.length !== 2 || members[0] !== "adam" || members[1] !== "chelsea" || !Number.isSafeInteger(item.amount) || item.amount <= 0 || item.shares.some((share) => !Number.isSafeInteger(share.amount) || share.amount < 0) || item.shares.reduce((sum, share) => sum + share.amount, 0) !== item.amount) {
+    const safeAmounts =
+      Number.isSafeInteger(item.amount) &&
+      item.amount > 0 &&
+      item.shares.every((share) => Number.isSafeInteger(share.amount) && share.amount >= 0);
+    const sharesMatchAmount =
+      safeAmounts &&
+      BigInt(item.shares[0]?.amount ?? 0) + BigInt(item.shares[1]?.amount ?? 0) === BigInt(item.amount);
+    if (
+      members.length !== 2 ||
+      members[0] !== "adam" ||
+      members[1] !== "chelsea" ||
+      !item.shares.some((share) => share.member === item.cashMember) ||
+      !safeAmounts ||
+      !sharesMatchAmount
+    ) {
       throw new Error(`ledger corruption: entry ${id} must have exactly one Adam and one Chelsea share summing to its amount`);
     }
   }

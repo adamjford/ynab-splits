@@ -135,10 +135,18 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 export default function SettlementDetail({ loaderData, actionData }: Route.ComponentProps) {
   const actionError = actionData && "error" in actionData ? actionData.error : null;
-  const actionStatus = actionData && "posted" in actionData && actionData.posted
-    ? "Settlement copied to YNAB."
-    : actionData && "restored" in actionData && actionData.restored
-      ? "Settlement restored."
-      : null;
+  const actionStatus = actionData && "voided" in actionData && actionData.voided
+    ? "Settlement voided."
+    : actionData && "skipped" in actionData && actionData.skipped
+      ? "Optional YNAB copy skipped."
+      : actionData && "alreadyExists" in actionData && actionData.alreadyExists
+        ? "Settlement copy already existed in YNAB."
+        : actionData && "zeroNet" in actionData && actionData.zeroNet
+          ? "Settlement has zero net amount; no YNAB copy was created."
+          : actionData && "posted" in actionData && actionData.posted
+            ? "Settlement copied to YNAB."
+            : actionData && "restored" in actionData && actionData.restored
+              ? "Settlement restored."
+              : null;
   return <section><Link className="text-sm underline" to="/settlements/new">New settlement</Link><h1 className="mt-3 text-3xl font-semibold">Settlement</h1><p className="mt-2 text-slate-600">{loaderData.settlement.start_date} through {loaderData.settlement.end_date} · {loaderData.settlement.amount_minor} · {loaderData.settlement.status}</p><ul className="mt-6 rounded border bg-white p-4">{loaderData.entries.map((entry) => <li className="border-b py-2 last:border-0" key={entry.id}>{entry.date} · {entry.description} · {entry.amountMinor}</li>)}</ul>{loaderData.settlement.status === "voided" ? <Form method="post" className="mt-6"><Button variant="secondary" name="intent" value="restore" type="submit">Restore settlement</Button></Form> : loaderData.settlement.amount_minor > 0 && <Form method="post" className="mt-6"><Button variant="primary" name="intent" value="addToYnab" type="submit">Copy my settlement to YNAB</Button></Form>}<ActionFeedback error={actionError} status={actionStatus} focusKey={actionData} /></section>;
 }

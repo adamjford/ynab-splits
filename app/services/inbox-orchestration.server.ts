@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { withLedgerTransaction, type AppDatabase } from "~/db/database.server";
-import { allocateShares, type SplitInput } from "~/domain/ledger";
+import { assertLedgerEntry, allocateShares, type SplitInput } from "~/domain/ledger";
 import { milliunitsToMinor, minorToMilliunits } from "~/domain/money";
 import { buildManualSplitTarget, verifyManualSplitReadback, type ManualSourceTransaction, type ManualSplitTarget, type OwnerAllocation } from "~/domain/manual-split";
 import { sourceSnapshotHash, verifyReviewedSource, verifySourceUpdate, type ReviewedSource, type SourceUpdateTarget, signReviewedSnapshot, verifyReviewedSnapshotToken } from "~/services/ynab-verification.server";
@@ -158,6 +158,9 @@ export async function saveInboxDecision(input: SaveInboxInput): Promise<{ saved:
     manualTarget = { ...buildManualSplitTarget(source, parentMinor < 0 ? -ownerShare : ownerShare, ownerAllocations, settings.splittingCategoryId), parentId: transaction.id };
   }
   const entryId = randomUUID();
+  const kind = parentMinor < 0 ? "expense" : "income";
+  const description = transaction.payee_name ?? "YNAB transaction";
+  assertLedgerEntry({ id: entryId, kind, amountMinor: totalMinor, cashMemberId: user.memberKey, shares, date: transaction.date, description });
   const decisionId = randomUUID();
   const postingId = updateTarget ? randomUUID() : null;
   const manualTaskId = manualTarget ? randomUUID() : null;
@@ -165,7 +168,7 @@ export async function saveInboxDecision(input: SaveInboxInput): Promise<{ saved:
   withLedgerTransaction(db, () => {
     const duplicate = db.prepare("select id from ynab_transaction_decisions where user_id = ? and plan_id = ? and ynab_transaction_id = ?").get(user.id, settings.planId, transaction.id);
     if (duplicate) throw new Error("This transaction has already been reviewed.");
-    db.prepare("insert into ledger_entries (id, household_id, kind, amount_minor, cash_member_key, entry_date, description, category_id, source_plan_id, source_transaction_id, source_snapshot_hash) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(entryId, user.householdId, parentMinor < 0 ? "expense" : "income", totalMinor, user.memberKey, transaction.date, transaction.payee_name ?? "YNAB transaction", transaction.category_id, settings.planId, transaction.id, hash);
+    db.prepare("insert into ledger_entries (id, household_id, kind, amount_minor, cash_member_key, entry_date, description, category_id, source_plan_id, source_transaction_id, source_snapshot_hash) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(entryId, user.householdId, kind, totalMinor, user.memberKey, transaction.date, description, transaction.category_id, settings.planId, transaction.id, hash);
     const insertShare = db.prepare("insert into ledger_shares (entry_id, member_key, amount_minor) values (?, ?, ?)");
     for (const share of signedShares) insertShare.run(entryId, share.memberKey, share.amountMinor);
     db.prepare("insert into ynab_transaction_decisions (id, user_id, plan_id, ynab_transaction_id, decision, ledger_entry_id, source_snapshot_hash, source_snapshot_json) values (?, ?, ?, ?, 'shared', ?, ?, ?)").run(decisionId, user.id, settings.planId, transaction.id, entryId, hash, JSON.stringify(transaction));
@@ -217,8 +220,14 @@ export function editLedgerEntry(db: AppDatabase, entryId: string, householdId: s
 }
 
 export function correctLedgerEntry(db: AppDatabase, householdId: string, entryId: string, input: { amountMinor: number; cashMemberKey: "adam" | "chelsea"; kind: "expense" | "income"; date: string; description: string; categoryId?: string | null; shares: [{ memberKey: "adam" | "chelsea"; amountMinor: number }, { memberKey: "adam" | "chelsea"; amountMinor: number }] }): string {
-  if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0 || input.shares[0].memberKey === input.shares[1].memberKey || input.shares[0].amountMinor < 0 || input.shares[1].amountMinor < 0 || input.shares[0].amountMinor + input.shares[1].amountMinor !== input.amountMinor) throw new Error("Corrective shares must be two non-negative integers summing to the amount.");
+  const [firstShare, secondShare] = input.shares;
+  const sharesAreSafe = input.shares.every((share) => Number.isSafeInteger(share.amountMinor) && share.amountMinor >= 0);
+  const sharesSumToAmount = Number.isSafeInteger(input.amountMinor) && input.amountMinor > 0 && sharesAreSafe
+    && BigInt(firstShare.amountMinor) + BigInt(secondShare.amountMinor) === BigInt(input.amountMinor);
+  if (!sharesSumToAmount || firstShare.memberKey === secondShare.memberKey) throw new Error("Corrective shares must be two non-negative integers summing to the amount.");
   const replacementId = randomUUID();
+  const correctiveShares = input.shares.map((share) => ({ memberId: share.memberKey, amountMinor: share.amountMinor })) as [{ memberId: string; amountMinor: number }, { memberId: string; amountMinor: number }];
+  assertLedgerEntry({ id: replacementId, kind: input.kind, amountMinor: input.amountMinor, cashMemberId: input.cashMemberKey, shares: correctiveShares, date: input.date, description: input.description });
   withLedgerTransaction(db, () => {
     assertEntryEditable(db, entryId, householdId);
     db.prepare("insert into ledger_entries (id, household_id, kind, amount_minor, cash_member_key, entry_date, description, category_id, correction_of_id) select ?, household_id, ?, ?, ?, ?, ?, ?, id from ledger_entries where id = ? and household_id = ?").run(replacementId, input.kind, input.amountMinor, input.cashMemberKey, input.date, input.description, input.categoryId ?? null, entryId, householdId);

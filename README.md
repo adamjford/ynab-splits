@@ -106,10 +106,10 @@ Loss of `TOKEN_ENCRYPTION_KEY` makes stored YNAB tokens unrecoverable. Restore t
 
 ## 2026 legacy importer
 
-The importer consumes the two CSV exports separately and requires an explicit household ID:
+The importer consumes the two CSV exports separately, requires an explicit household ID, and requires `DATABASE_PATH` even for dry runs:
 
 ```bash
-pnpm import:2026 -- \
+DATABASE_PATH=./data/import-test.sqlite pnpm import:2026 -- \
   --transactions /path/to/transactions.csv \
   --split-view /path/to/split-view.csv \
   --household <local-household-id>

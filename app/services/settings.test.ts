@@ -16,13 +16,15 @@ describe("savePlanSettings", () => {
     db.close();
   });
 
-  it("blocks a plan change while a posting is unresolved", () => {
-    const db = setup();
-    savePlanSettings(db, "u1", { planId: "p1", currencyIsoCode: "USD", currencyDecimalDigits: 2, settlementMode: "detailed" });
-    db.prepare("insert into settlements (id, household_id, start_date, end_date, amount_minor, status) values ('s1', 'h1', '2026-01-01', '2026-01-02', 100, 'open')").run();
-    db.prepare("insert into ynab_postings (id, settlement_id, user_id, posting_kind, status, import_id, intended_target_json) values ('post1', 's1', 'u1', 'settlement', 'failed', 'YS:post1', '{}')").run();
-    expect(() => savePlanSettings(db, "u1", { planId: "p2", currencyIsoCode: "USD", currencyDecimalDigits: 2, settlementMode: "detailed" })).toThrow(/posting/i);
-    db.close();
+  it("blocks a plan change while any posting is unresolved", () => {
+    for (const status of ["pending", "conflict", "failed"] as const) {
+      const db = setup();
+      savePlanSettings(db, "u1", { planId: "p1", currencyIsoCode: "USD", currencyDecimalDigits: 2, settlementMode: "detailed" });
+      db.prepare("insert into ynab_postings (id, user_id, posting_kind, status, import_id, intended_target_json) values (?, 'u1', 'settlement', ?, ?, '{}')").run(`post-${status}`, status, `YS:${status}`);
+      expect(() => savePlanSettings(db, "u1", { planId: "p2", currencyIsoCode: "USD", currencyDecimalDigits: 2, settlementMode: "detailed" })).toThrow(/posting/i);
+      expect(db.prepare("select plan_id from plan_settings where user_id = 'u1'").get()).toEqual({ plan_id: "p1" });
+      db.close();
+    }
   });
   it("replaces only the authenticated user's category mappings and resets them on plan change", () => {
     const db = setup();
@@ -41,6 +43,7 @@ describe("savePlanSettings", () => {
     })).not.toThrow();
     expect(db.prepare("select plan_id, settlement_account_id, splitting_category_id from plan_settings where user_id = 'u1'").get()).toEqual({ plan_id: "p3", settlement_account_id: null, splitting_category_id: null });
     expect(db.prepare("select count(*) as count from category_assignments where user_id = 'u1'").get()).toEqual({ count: 0 });
+    expect(db.prepare("select count(*) as count from source_accounts where user_id = 'u1'").get()).toEqual({ count: 0 });
     expect(db.prepare("select destination_category_id from category_assignments where user_id = 'u2'").get()).toEqual({ destination_category_id: "dest-2" });
     db.close();
   });

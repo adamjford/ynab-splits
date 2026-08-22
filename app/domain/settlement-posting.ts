@@ -50,6 +50,7 @@ export function buildSettlementTarget(
   const subtransactions: SettlementSubtransaction[] = [];
   let aggregateSplitting = 0;
   for (const entry of entries) {
+    if (entry.voidedAt) continue;
     const debt = debtFor(entry, memberId);
     if (debt > 0) {
       const categoryId = entry.categoryId

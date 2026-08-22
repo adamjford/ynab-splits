@@ -28,6 +28,7 @@ describe("ledger repository", () => {
       shares: [{ memberKey: "adam", amountMinor: 40 }, { memberKey: "chelsea", amountMinor: 40 }],
     })).toThrow(/sum/i);
     expect(db.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 0 });
+    expect(db.prepare("select count(*) as count from ledger_shares").get()).toEqual({ count: 0 });
     db.close();
   });
 
@@ -69,10 +70,68 @@ describe("ledger repository", () => {
       description: "Invalid",
     };
     expect(() => insertLedgerEntry(db, { ...input, shares: [{ memberKey: "adam", amountMinor: 5 }, { memberKey: "adam", amountMinor: 5 }] })).toThrow(/two members/i);
-    expect(() => insertLedgerEntry(db, { ...input, shares: [{ memberKey: "adam", amountMinor: -1 }, { memberKey: "chelsea", amountMinor: 11 }] })).toThrow(/sum/i);
+    expect(() => insertLedgerEntry(db, { ...input, shares: [{ memberKey: "adam", amountMinor: -1 }, { memberKey: "chelsea", amountMinor: 11 }] })).toThrow(/negative|sum/i);
     expect(db.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 0 });
+    expect(db.prepare("select count(*) as count from ledger_shares").get()).toEqual({ count: 0 });
     db.close();
   });
+  it("rejects malformed direct inputs before writing a parent row", () => {
+    const cases: Array<{ name: string; value: unknown }> = [
+      { name: "missing shares", value: undefined },
+      { name: "non-array shares", value: "not-an-array" },
+      { name: "malformed share", value: [{ memberKey: "adam", amountMinor: 5 }, null] },
+      { name: "unknown member", value: [{ memberKey: "eve", amountMinor: 5 }, { memberKey: "chelsea", amountMinor: 5 }] },
+      { name: "fractional share", value: [{ memberKey: "adam", amountMinor: 1.5 }, { memberKey: "chelsea", amountMinor: 8.5 }] },
+      { name: "unsafe share", value: [{ memberKey: "adam", amountMinor: Number.MAX_SAFE_INTEGER + 1 }, { memberKey: "chelsea", amountMinor: 0 }] },
+      { name: "negative share", value: [{ memberKey: "adam", amountMinor: -1 }, { memberKey: "chelsea", amountMinor: 11 }] },
+    ];
+    for (const [index, testCase] of cases.entries()) {
+      const db = createDatabase(":memory:");
+      db.prepare("insert into households (id, name) values (?, ?)").run("h1", "Home");
+      expect(() => insertLedgerEntry(db, {
+        id: `invalid-share-${index}`,
+        householdId: "h1",
+        kind: "expense",
+        amountMinor: 10,
+        cashMemberKey: "adam",
+        date: "2026-01-01",
+        description: "Invalid",
+        shares: testCase.value,
+      } as never), testCase.name).toThrow();
+      expect(db.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 0 });
+      db.close();
+    }
+  });
+
+  it("rejects malformed parent values before writing a row", () => {
+    const cases: Array<{ name: string; amountMinor?: unknown; date?: unknown; description?: unknown; cashMemberKey?: unknown }> = [
+      { name: "unknown cash member", cashMemberKey: "eve" },
+      { name: "zero amount", amountMinor: 0 },
+      { name: "negative amount", amountMinor: -1 },
+      { name: "fractional amount", amountMinor: 10.5 },
+      { name: "unsafe amount", amountMinor: Number.MAX_SAFE_INTEGER + 1 },
+      { name: "invalid calendar date", date: "2026-02-29" },
+      { name: "invalid date format", date: "01/01/2026" },
+      { name: "blank description", description: "   " },
+    ];
+    for (const [index, testCase] of cases.entries()) {
+      const db = createDatabase(":memory:");
+      db.prepare("insert into households (id, name) values (?, ?)").run("h1", "Home");
+      expect(() => insertLedgerEntry(db, {
+        id: `invalid-parent-${index}`,
+        householdId: "h1",
+        kind: "expense",
+        amountMinor: testCase.amountMinor ?? 10,
+        cashMemberKey: testCase.cashMemberKey ?? "adam",
+        date: testCase.date ?? "2026-01-01",
+        description: testCase.description ?? "Valid",
+        shares: [{ memberKey: "adam", amountMinor: 4 }, { memberKey: "chelsea", amountMinor: 6 }],
+      } as never), testCase.name).toThrow();
+      expect(db.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 0 });
+      db.close();
+    }
+  });
+
 
   it("rolls back the parent when a valid share group hits a foreign-key failure", () => {
     const db = createDatabase(":memory:");

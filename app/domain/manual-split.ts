@@ -61,6 +61,9 @@ function sortedLines(lines: Array<{ categoryId: string | null; amountMinor: numb
 export function buildManualSplitTarget(source: ManualSourceTransaction, memberShareMinor: number, ownerAllocations: OwnerAllocation[], splittingCategoryId: string): ManualSplitTarget {
   if (ownerAllocations.length === 0) throw new Error("at least one owner allocation is required");
   if (!Number.isSafeInteger(memberShareMinor)) throw new Error("owner share must be an integer");
+  if (ownerAllocations.some((allocation) => !Number.isSafeInteger(allocation.amountMinor))) {
+    throw new Error("owner allocation amounts must be safe integers");
+  }
   const ownerTotal = ownerAllocations.reduce((sum, allocation) => sum + allocation.amountMinor, 0);
   if (ownerTotal !== memberShareMinor) throw new Error("owner allocations must total the member share");
   const existingByCategory = new Map(source.subtransactions.filter((line) => line.categoryId !== splittingCategoryId).map((line) => [line.categoryId, line]));

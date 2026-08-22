@@ -33,7 +33,9 @@ export function formatMinorUnits(amountMinor: number, currency: CurrencyFormat |
 
 export function minorToMilliunits(amountMinor: number, decimalDigits: number): number {
   if (!Number.isSafeInteger(amountMinor)) throw new RangeError("minor amount must be a safe integer");
-  return amountMinor * scaleFor(decimalDigits);
+  const milliunits = amountMinor * scaleFor(decimalDigits);
+  if (!Number.isSafeInteger(milliunits)) throw new RangeError("milliunit amount must be a safe integer");
+  return milliunits;
 }
 
 export function milliunitsToMinor(amountMilliunits: number, decimalDigits: number): number {

@@ -1,4 +1,4 @@
-import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
+import { isRouteErrorResponse, Link, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import { useEffect } from "react";
 import type { Route } from "./+types/root";
 import { securityHeaders } from "./services/response.server";
@@ -28,5 +28,5 @@ export default function App() {
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   const message = isRouteErrorResponse(error) ? `${error.status} ${error.statusText}` : "Unexpected error";
-  return <main className="mx-auto max-w-3xl p-6"><h1 className="text-2xl font-semibold">{message}</h1><p className="mt-2">The request could not be completed. Return to the dashboard and try again.</p></main>;
+  return <main className="mx-auto max-w-3xl p-6"><h1 className="text-2xl font-semibold">{message}</h1><p className="mt-2">The request could not be completed. Return to the <Link className="underline" to="/">dashboard</Link> and try again.</p></main>;
 }

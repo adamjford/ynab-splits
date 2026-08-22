@@ -50,6 +50,19 @@ describe("manual split targets", () => {
     expect(() => buildManualSplitTarget(source, -944, [{ categoryId: "groceries", amountMinor: -945 }], "splitting")).toThrow(/total/i);
   });
 
+  it("rejects every non-safe-integer owner allocation amount", () => {
+    for (const amountMinor of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 1,
+      Number.MIN_SAFE_INTEGER - 1,
+    ]) {
+      expect(() => buildManualSplitTarget(source, -945, [{ categoryId: "groceries", amountMinor }], "splitting")).toThrow(/safe integer/i);
+    }
+  });
+
   it("uses explicit allocation metadata and safe fallbacks for new lines", () => {
     const target = buildManualSplitTarget(
       { ...source, amountMinor: -10, payeeName: null, subtransactions: [] },

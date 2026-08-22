@@ -39,13 +39,28 @@ function normalize(value: string): string {
 }
 
 function parseMinor(value: string): number {
-  const normalized = value.replace(/[$,]/g, "").trim();
-  if (!/^-?\d+(?:\.\d{1,2})?$/.test(normalized)) throw new Error(`invalid amount ${value}`);
-  const sign = normalized.startsWith("-") ? -1 : 1;
-  const unsigned = normalized.replace(/^-/, "");
-  const [whole, fraction = ""] = unsigned.split(".");
-  return sign * (Number(whole) * 100 + Number(fraction.padEnd(2, "0")));
+  const normalized = value.trim();
+  const match = /^(-)?\$?(\d+|\d{1,3}(?:,\d{3})+)(?:\.(\d{1,2}))?$/.exec(normalized);
+  if (!match) throw new Error(`invalid amount ${value}`);
+  const sign = match[1] ? -1n : 1n;
+  const whole = BigInt(match[2].replace(/,/g, ""));
+  const fraction = BigInt((match[3] ?? "").padEnd(2, "0") || "0");
+  const minor = sign * (whole * 100n + fraction);
+  const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
+  if (minor < -maxSafe || minor > maxSafe) throw new Error(`invalid amount ${value}`);
+  return Number(minor);
 }
+function isValidDate(date: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const timestamp = Date.UTC(year, month - 1, day);
+  const parsed = new Date(timestamp);
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+}
+
 
 function headerIndex(header: string[], name: string): number {
   const index = header.findIndex((value) => normalize(value) === normalize(name));
@@ -112,10 +127,14 @@ export function parseLegacy2026(transactionsCsv: string, splitViewCsv: string): 
   }
 
   for (let sourceIndex = 1; sourceIndex < transactions.length; sourceIndex += 1) {
-    const source = transactions[sourceIndex];
     const sourceRow = sourceIndex + 1;
+    const source = transactions[sourceIndex];
     const date = source[sourceDate];
     if (!date || !date.startsWith("2026-")) continue;
+    if (!isValidDate(date)) {
+      errors.push(`row ${sourceRow}: invalid calendar date`);
+      continue;
+    }
     const description = source[sourceName]?.trim() ?? "";
     let amountMinor: number;
     try {
@@ -124,9 +143,17 @@ export function parseLegacy2026(transactionsCsv: string, splitViewCsv: string): 
       errors.push(`row ${sourceRow}: ${error instanceof Error ? error.message : "invalid amount"}`);
       continue;
     }
+    if (amountMinor === 0) {
+      errors.push(`row ${sourceRow}: amount must be positive`);
+      continue;
+    }
     const payer = normalize(source[sourcePayer] ?? "");
     if (payer !== "adam" && payer !== "chelsea") {
       errors.push(`row ${sourceRow}: payer must be Adam or Chelsea`);
+      continue;
+    }
+    if (!description) {
+      errors.push(`row ${sourceRow}: description cannot be blank`);
       continue;
     }
     const split = splitView[sourceIndex + 3];

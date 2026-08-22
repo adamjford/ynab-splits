@@ -75,7 +75,7 @@ export function persistConnection(db: AppDatabase, env: AppEnv, user: YnabUser, 
     const existing = db.prepare("select id from users where ynab_user_id = ?").get(user.id) as { id: string } | undefined;
     const userId = existing?.id ?? localUserId;
     db.prepare(`insert into users (id, ynab_user_id, display_name) values (?, ?, ?)
-      on conflict(ynab_user_id) do update set display_name = excluded.display_name`).run(userId, user.id, displayName);
+      on conflict(ynab_user_id) do nothing`).run(userId, user.id, displayName);
     const saved = db.prepare("select id from users where ynab_user_id = ?").get(user.id) as { id: string };
     db.prepare(`insert into oauth_connections
       (id, user_id, encrypted_access_token, encrypted_refresh_token, access_expires_at, updated_at)

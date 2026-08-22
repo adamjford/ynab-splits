@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { configurePlan, newContext, resetFakeYnab, signIn, waitForHydration } from "./test-helpers";
+import { FAKE_ORIGIN } from "./fake-ynab-server";
+import { configurePlan, installFakeOAuth, newContext, resetFakeYnab, signIn, waitForHydration } from "./test-helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -81,6 +82,55 @@ test("focuses inbox feedback after keyboard save", async ({ browser, baseURL }) 
     await expect(status).toHaveText("Transaction review saved.");
     await expect(status).toBeFocused();
     await expect(page.getByRole("article").filter({ hasText: "Local market" })).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
+
+test("keeps a stale inbox review unsuccessful and asks for a refresh", async ({ browser, baseURL }) => {
+  const context = await newContext(browser);
+  const page = await context.newPage();
+  try {
+    await resetFakeYnab(page);
+    await signIn(page, "adam", "Adam", baseURL!);
+    await configurePlan(page, "adam");
+    await page.goto("/inbox");
+    await waitForHydration(page);
+
+    const review = page.getByRole("article").filter({ hasText: "Local market" });
+    const remoteChange = await page.request.put(`${FAKE_ORIGIN}/v1/plans/fake-plan-adam/transactions/fake-transaction-adam-1`, {
+      headers: { Authorization: "Bearer fake-access-adam" },
+      data: { transaction: { payee_name: "Changed after review" } },
+    });
+    expect(remoteChange.ok()).toBeTruthy();
+
+    await review.getByRole("button", { name: "Not shared" }).click();
+    await expect(page.getByRole("alert")).toHaveText("The reviewed transaction changed; refresh the inbox before saving.");
+    await expect(page.getByRole("article")).toHaveCount(1);
+    await expect(page.getByRole("article")).toContainText("Changed after review");
+  } finally {
+    await context.close();
+  }
+});
+
+test("shows invalid invite recovery and permits creating a household without it", async ({ browser }) => {
+  const context = await newContext(browser);
+  const page = await context.newPage();
+  try {
+    await resetFakeYnab(page);
+    await installFakeOAuth(page, "chelsea");
+    await page.goto("/invite/expired-or-invalid-test-token");
+    await waitForHydration(page);
+    await expect(page).toHaveURL(/\/onboarding\?invite=expired-or-invalid-test-token$/);
+
+    await page.getByLabel("Ledger display name").fill("Chelsea");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByRole("alert")).toHaveText("invite is expired or invalid");
+    await page.goto("/onboarding");
+    await waitForHydration(page);
+    await page.getByLabel("Ledger display name").fill("Chelsea");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   } finally {
     await context.close();
   }

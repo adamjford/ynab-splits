@@ -16,6 +16,16 @@ describe("allocateShares", () => {
     ]);
   });
 
+  it("calculates percentage shares exactly at the safe-integer boundary", () => {
+    const totalMinor = Number.MAX_SAFE_INTEGER;
+    const otherBasisPoints = 121;
+
+    expect(allocateShares(totalMinor, "adam", "chelsea", { type: "percentage", otherBasisPoints })).toEqual([
+      { memberId: "adam", amountMinor: 8898212143758626 },
+      { memberId: "chelsea", amountMinor: 108987110982365 },
+    ]);
+  });
+
   it("supports an exact counterparty share and zero share", () => {
     expect(allocateShares(189, "adam", "chelsea", { type: "exact", otherAmountMinor: 0 })).toEqual([
       { memberId: "adam", amountMinor: 189 },
@@ -83,9 +93,60 @@ describe("ledger validation", () => {
     expect(() => assertLedgerEntry({ ...valid, shares: [{ memberId: "adam", amountMinor: 5 }, { memberId: "adam", amountMinor: 5 }] })).toThrow(/exactly two/i);
     expect(() => assertLedgerEntry({ ...valid, shares: [{ memberId: "adam", amountMinor: -1 }, { memberId: "chelsea", amountMinor: 11 }] })).toThrow(/non-negative/i);
     expect(() => assertLedgerEntry({ ...valid, shares: [{ memberId: "adam", amountMinor: 5 }, { memberId: "chelsea", amountMinor: 6 }] })).toThrow(/sum/i);
+    expect(() =>
+      assertLedgerEntry({
+        ...valid,
+        cashMemberId: "nobody",
+      }),
+    ).toThrow(/cash member.*share/i);
     expect(() => assertLedgerEntry({ ...valid, date: "01-01-2026" })).toThrow(/date/i);
     expect(() => assertLedgerEntry({ ...valid, description: "   " })).toThrow(/date and description/i);
     expect(() => assertLedgerEntry(valid)).not.toThrow();
+  });
+  it.each(["2026-02-29", "2026-04-31", "2026-13-01", "2026-00-10"])("rejects impossible calendar dates %s", (date) => {
+    expect(() => assertLedgerEntry({ ...valid, date })).toThrow(/date/i);
+  });
+
+  it("accepts leap-day and month-end calendar dates", () => {
+    expect(() => assertLedgerEntry({ ...valid, date: "2024-02-29" })).not.toThrow();
+    expect(() => assertLedgerEntry({ ...valid, date: "2026-04-30" })).not.toThrow();
+  });
+
+  it.each([1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])(
+    "rejects non-integral, non-finite, or unsafe share amounts %s",
+    (amountMinor) => {
+      expect(() =>
+        assertLedgerEntry({
+          ...valid,
+          shares: [
+            { memberId: "adam", amountMinor },
+            { memberId: "chelsea", amountMinor: 4 },
+          ],
+        }),
+      ).toThrow(/non-negative/i);
+    },
+  );
+
+  it("accepts odd and zero-valued shares", () => {
+    expect(() =>
+      assertLedgerEntry({
+        ...valid,
+        amountMinor: 11,
+        shares: [
+          { memberId: "adam", amountMinor: 6 },
+          { memberId: "chelsea", amountMinor: 5 },
+        ],
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertLedgerEntry({
+        ...valid,
+        shares: [
+          { memberId: "adam", amountMinor: 10 },
+          { memberId: "chelsea", amountMinor: 0 },
+        ],
+      }),
+    ).not.toThrow();
   });
 });
 

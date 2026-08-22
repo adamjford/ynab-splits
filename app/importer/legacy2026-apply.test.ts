@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createDatabase, type AppDatabase } from "../db/database.server";
 import { applyLegacy2026, preflightLegacy2026 } from "./legacy2026-apply.server";
-import type { LegacyImportReport } from "./legacy2026";
+import type { LegacyImportReport, LegacyImportRow } from "./legacy2026";
 
 const open: LegacyImportReport = {
   errors: [],
@@ -63,14 +64,45 @@ describe("legacy 2026 atomic apply", () => {
     expect(db.prepare("select description from ledger_entries where id = 'legacy:sheet-2026:2'").get()).toEqual({ description: "Amazon" });
   });
 
-  it("rejects parser errors and household identity mismatches without writes", () => {
+  it("rejects parser errors and household membership mismatches without writes", () => {
     const db = setup(); databases.push(db);
     expect(applyLegacy2026(db, "h1", { ...open, errors: ["bad source row"] }).blocked).toBe(true);
-    db.prepare("update users set display_name = 'A.' where id = 'u1'").run();
+    db.prepare("delete from memberships where household_id = 'h1' and member_key = 'chelsea'").run();
     const result = applyLegacy2026(db, "h1", open);
     expect(result.blocked).toBe(true);
     expect(db.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 0 });
   });
+  it("permits custom display names when household member keys are valid", () => {
+    const db = setup(); databases.push(db);
+    db.exec("update users set display_name = case id when 'u1' then 'A.' when 'u2' then 'C.' end");
+    const result = applyLegacy2026(db, "h1", open);
+    expect(result.blocked).toBe(false);
+    expect(result.applied).toMatchObject({ entries: 1, shares: 2 });
+    expect(db.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 1 });
+  });
+  it("rejects invalid programmatic rows before classification and leaves the database unchanged", () => {
+    const db = setup(); databases.push(db);
+    const invalidRows: LegacyImportRow[] = [
+      { ...open.rows[0], date: "2026-02-30" },
+      { ...open.rows[0], description: "   " },
+      { ...open.rows[0], amountMinor: 0, shares: { adam: 0, chelsea: 0 } },
+      { ...open.rows[0], amountMinor: Number.MAX_SAFE_INTEGER + 1, shares: { adam: 1, chelsea: 1 } },
+      { ...open.rows[0], shares: { adam: -1, chelsea: 1890 } },
+      { ...open.rows[0], shares: { adam: 944, chelsea: 944 } },
+    ];
+    for (const row of invalidRows) {
+      const report: LegacyImportReport = { ...open, rows: [row] };
+      const dryRun = preflightLegacy2026(db, "h1", report);
+      expect(dryRun.conflicts.length).toBeGreaterThan(0);
+      expect(dryRun.insert).toEqual({ entries: 0, shares: 0, settlements: 0, items: 0 });
+      const result = applyLegacy2026(db, "h1", report);
+      expect(result.blocked).toBe(true);
+      expect(result.applied).toEqual({ entries: 0, shares: 0, settlements: 0, items: 0 });
+      expect(db.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 0 });
+      expect(db.prepare("select count(*) as count from ledger_shares").get()).toEqual({ count: 0 });
+    }
+  });
+
 
   it("blocks missing related shares or settlement items without applying", () => {
     const sharesDb = setup(); databases.push(sharesDb);
@@ -179,4 +211,65 @@ describe("legacy 2026 atomic apply", () => {
       end_date: "2026-01-02",
     });
   });
+  it("rolls back all inserted rows when a SQL failure occurs mid-apply", () => {
+    const db = setup(); databases.push(db);
+    const second = { ...open.rows[0], legacyKey: "sheet-2026:3", sourceRow: 3, description: "Coffee" };
+    const report: LegacyImportReport = {
+      ...open,
+      rows: [open.rows[0], second],
+      periods: [{ entryKeys: [open.rows[0].legacyKey, second.legacyKey], calculatedNetMinor: -944 }],
+    };
+    db.exec("create trigger fail_second_legacy_entry before insert on ledger_entries when new.legacy_key = 'sheet-2026:3' begin select raise(abort, 'forced importer failure'); end");
+    expect(() => applyLegacy2026(db, "h1", report)).toThrow(/forced importer failure/);
+    expect(db.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 0 });
+    expect(db.prepare("select count(*) as count from ledger_shares").get()).toEqual({ count: 0 });
+  });
+
+  it("reports CLI dry-run preflight deltas without writes and skips the database on parse errors", () => {
+    const db = setup();
+    const databasePath = join(paths.at(-1)!, "ledger.sqlite");
+    db.close();
+    const directory = paths.at(-1)!;
+    const transactionsPath = join(directory, "transactions.csv");
+    const splitPath = join(directory, "split.csv");
+    writeFileSync(transactionsPath, "Date,Name,Amount (negative if income),Paid/received by\n2026-01-01,Amazon,18.89,Adam\n");
+    writeFileSync(splitPath, "ignored\nignored\nDate,Name,Amount,payer,x,x,x,x,x,x,x,Paid/received by amount,x,Adam,Chelsea\nspacer\n2026-01-01,Amazon,18.89,Adam,,,,,,,,9.44,,9.45,9.44\n");
+    const run = (path: string, extra: string[] = []) => spawnSync(
+      process.execPath,
+      [join(process.cwd(), "node_modules/tsx/dist/cli.mjs"), join(process.cwd(), "scripts/import-2026.ts"), "--transactions", transactionsPath, "--split-view", splitPath, "--household", "h1", ...extra],
+      { encoding: "utf8", env: { ...process.env, DATABASE_PATH: path } },
+    );
+    const first = run(databasePath);
+    expect(first.status).toBe(0);
+    expect(JSON.parse(first.stdout).preflight).toMatchObject({
+      insert: { entries: 1, shares: 2, settlements: 0, items: 0 },
+      exactSkip: { entries: 0, shares: 0, settlements: 0, items: 0 },
+      immutableConflict: { entries: 0, shares: 0, settlements: 0, items: 0 },
+    });
+    const afterFirst = createDatabase(databasePath);
+    expect(afterFirst.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 0 });
+    afterFirst.close();
+
+    const applied = run(databasePath, ["--apply"]);
+    expect(applied.status).toBe(0);
+    const second = run(databasePath);
+    expect(second.status).toBe(0);
+    expect(JSON.parse(second.stdout).preflight.exactSkip).toMatchObject({ entries: 1, shares: 2 });
+    const afterSecond = createDatabase(databasePath);
+    expect(afterSecond.prepare("select count(*) as count from ledger_entries").get()).toEqual({ count: 1 });
+    afterSecond.close();
+    const absentPath = join(directory, "absent.sqlite");
+    const absent = run(absentPath);
+    expect(absent.status).not.toBe(0);
+    expect(absent.stderr).toMatch(/database|file/i);
+    expect(existsSync(absentPath)).toBe(false);
+
+    const parseErrorPath = join(directory, "parse-error.sqlite");
+    writeFileSync(transactionsPath, "Date,Name\n\"unterminated");
+    const parseError = run(parseErrorPath);
+    expect(parseError.status).not.toBe(0);
+    expect(parseError.stderr).toMatch(/validationErrors/);
+    expect(existsSync(parseErrorPath)).toBe(false);
+  });
+
 });

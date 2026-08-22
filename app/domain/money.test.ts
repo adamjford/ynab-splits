@@ -40,6 +40,10 @@ describe("money conversions", () => {
     expect(() => milliunitsToMinor(1, 1.5)).toThrow(/decimal/i);
     expect(formatMinorUnits(1, undefined)).toMatchObject({ status: "configuration-required" });
   });
+  it("rejects a converted milliunit result that is unsafe", () => {
+    expect(() => minorToMilliunits(Number.MAX_SAFE_INTEGER, 2)).toThrow(/safe integer/i);
+  });
+
 
   it("requires matching currency formats for linked plans", () => {
     const usd = { isoCode: "USD", decimalDigits: 2 };

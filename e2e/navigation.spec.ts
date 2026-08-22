@@ -320,12 +320,13 @@ test("filters and activates visible quick-navigation results", async ({ browser,
     await openPalette(page);
     const ledgerResult = dialog(page).getByRole("link", { name: "Ledger", exact: true });
     await expect(ledgerResult).toHaveAttribute("aria-current", "page");
+    await expect(dialog(page).locator('[aria-current="page"]')).toHaveCount(1);
     await ledgerResult.focus();
     await dialog(page).getByRole("link", { name: "Inbox", exact: true }).hover();
     await expect(ledgerResult).toBeFocused();
 
     await navigationFilter(page).fill("does-not-exist");
-    await expect(dialog(page).getByText("No destinations found.", { exact: true })).toBeVisible();
+    await expect(dialog(page).getByRole("status")).toHaveText("No destinations found.");
     await expect(navigationFilter(page)).toBeFocused();
     const currentURL = page.url();
     for (const key of ["Enter", "ArrowDown", "ArrowUp", "Home", "End"]) {
@@ -354,7 +355,9 @@ test("restores focus after palette dismissal", async ({ browser, baseURL }) => {
 
     await openPalette(page);
     const close = dialog(page).getByRole("button", { name: /close/i });
-    await close.click();
+    await close.focus();
+    await expect(close).toBeFocused();
+    await close.press("Enter");
     await expect(dialog(page)).not.toBeVisible();
     await expect(trigger).toBeFocused();
 

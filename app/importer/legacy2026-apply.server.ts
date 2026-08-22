@@ -1,4 +1,5 @@
 import { withLedgerTransaction, type AppDatabase } from "../db/database.server";
+import { assertLedgerEntry } from "../domain/ledger";
 import type { LegacyImportReport, LegacyImportRow, LegacyPeriod, LegacyTransfer } from "./legacy2026";
 
 export interface LegacyUnitCounts {
@@ -77,6 +78,29 @@ function expectedRowMap(report: LegacyImportReport): Map<string, LegacyImportRow
   for (const row of report.rows) rows.set(row.legacyKey, row);
   return rows;
 }
+function validateImportRow(row: LegacyImportRow): string | null {
+  try {
+    if (row.kind !== "expense" && row.kind !== "income") throw new Error("ledger entry requires a known kind");
+    if (row.cashMemberKey !== "adam" && row.cashMemberKey !== "chelsea") throw new Error("ledger entry requires a known cash member");
+    const shares = row.shares;
+    assertLedgerEntry({
+      id: row.legacyKey,
+      kind: row.kind,
+      amountMinor: row.amountMinor,
+      cashMemberId: row.cashMemberKey,
+      shares: [
+        { memberId: "adam", amountMinor: shares?.adam },
+        { memberId: "chelsea", amountMinor: shares?.chelsea },
+      ],
+      date: row.date,
+      description: row.description,
+    });
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : "invalid ledger row";
+  }
+}
+
 
 type TransferPeriod = Omit<LegacyPeriod, "transfer"> & { transfer: LegacyTransfer };
 
@@ -139,6 +163,14 @@ function addConflict(preflight: LegacyPreflight, message: string, unit: keyof Le
  */
 export function preflightLegacy2026(db: AppDatabase, householdId: string, report: LegacyImportReport): LegacyPreflight {
   const preflight: LegacyPreflight = { insert: zeroCounts(), skip: zeroCounts(), conflict: zeroCounts(), conflicts: [] };
+  const invalidRows = new Map<LegacyImportRow, string>();
+  for (const row of report.rows) {
+    const validationError = validateImportRow(row);
+    if (validationError !== null) {
+      invalidRows.set(row, validationError);
+      addConflict(preflight, `row ${row.sourceRow}: ${validationError}`, "entries");
+    }
+  }
   if (report.errors.length > 0) {
     for (const error of report.errors) preflight.conflicts.push(error);
   }
@@ -151,13 +183,16 @@ export function preflightLegacy2026(db: AppDatabase, householdId: string, report
     transferRows.add(period.transfer.sourceRow);
   }
 
-  const members = db.prepare(`select m.member_key, u.display_name from memberships m join users u on u.id = m.user_id where m.household_id = ? order by m.member_key`).all(householdId) as Array<{ member_key: MemberKey; display_name: string }>;
+  const members = db.prepare(`select m.member_key from memberships m join users u on u.id = m.user_id where m.household_id = ? order by m.member_key`).all(householdId) as Array<{ member_key: string }>;
+  const memberKeys = new Set(members.map((member) => member.member_key));
   const validMembers = members.length === 2
-    && members.some((member) => member.member_key === "adam" && member.display_name === "Adam")
-    && members.some((member) => member.member_key === "chelsea" && member.display_name === "Chelsea");
-  if (!validMembers) addConflict(preflight, "household must have exactly named members Adam and Chelsea", "entries");
+    && memberKeys.size === 2
+    && memberKeys.has("adam")
+    && memberKeys.has("chelsea");
+  if (!validMembers) addConflict(preflight, "household must have exactly member keys adam and chelsea", "entries");
 
   for (const row of report.rows) {
+    if (invalidRows.has(row)) continue;
     const id = expectedEntryId(row);
     const existing = db.prepare("select id, household_id, kind, amount_minor, cash_member_key, entry_date, description, legacy_key from ledger_entries where id = ?").get(id) as ExistingEntry | undefined;
     if (!existing) {

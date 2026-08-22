@@ -1,5 +1,6 @@
 import { Form } from "react-router";
 import { Button } from "~/components/Button";
+import { ActionFeedback } from "~/components/ActionFeedback";
 import type { Route } from "./+types/onboarding";
 import { createHash, randomUUID } from "node:crypto";
 import { database } from "~/services/request.server";
@@ -46,5 +47,6 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Onboarding({ actionData }: Route.ComponentProps) {
-  return <main className="mx-auto max-w-xl p-6"><h1 className="text-2xl font-semibold">Set up your household</h1><p className="mt-2 text-slate-600">Choose the name the other household member will see.</p><Form method="post" className="mt-6 space-y-4"><label className="block">Ledger display name<input className="mt-1 w-full rounded border p-2" name="displayName" required /></label><label className="block">Invite token (leave blank to create the household)<input className="mt-1 w-full rounded border p-2" name="inviteToken" /></label>{actionData?.error && <p role="alert" className="text-red-700">{actionData.error}</p>}<Button variant="primary" type="submit">Continue</Button></Form></main>;
+  const actionError = actionData && typeof actionData === "object" && "error" in actionData && typeof actionData.error === "string" ? actionData.error : null;
+  return <main className="mx-auto max-w-xl p-6"><h1 className="text-2xl font-semibold">Set up your household</h1><p className="mt-2 text-slate-600">Choose the name the other household member will see.</p><Form method="post" className="mt-6 space-y-4"><label className="block">Ledger display name<input className="mt-1 w-full rounded border p-2" name="displayName" required /></label><label className="block">Invite token (leave blank to create the household)<input className="mt-1 w-full rounded border p-2" name="inviteToken" /></label><ActionFeedback error={actionError} focusKey={actionData} /><Button variant="primary" type="submit">Continue</Button></Form></main>;
 }
