@@ -7,12 +7,30 @@ safety remain in [README.md](../../README.md).
 
 ## Parsing and validation
 
-- The importer parses the transactions and split-view exports separately while
-  preserving their row alignment.
-- Only 2026 rows are accepted. An explicit household ID is required.
-- Recorded integer minor-unit shares and transfer values are preserved. A signed
-  workbook mismatch is reported as a conflict; the importer does not invent an
-  adjustment.
+- The importer parses the transactions and Split View exports separately while
+  preserving their row alignment. It normalizes embedded whitespace for header
+  matching, requires the semantic transaction headers, and requires Split View
+  row 3 plus fixed columns L (`Paid/received by amount`), N (`Adam`), and O
+  (`Chelsea`).
+- Each accepted source row is paired with its corresponding Split View row and
+  must match exactly on date, name, signed amount magnitude, and payer. Missing
+  rows, malformed amounts, unsupported payer names, identity mismatches, and
+  counterparty shares above the total are reported without producing a row.
+- Only dates beginning with the supported 2026 period are accepted. Positive
+  workbook amounts become expenses; negative amounts become income. The
+  counterparty share is taken from the absolute Split View amount and the
+  remainder stays with the payer or recipient. Each ordinary row receives the
+  deterministic key `sheet-2026:<source-row>`.
+
+## Historical transfers and periods
+
+- Case-insensitive `Settle Up` rows become historical transfers rather than
+  ledger entries. The signed workbook amount determines debtor and creditor,
+  while the recorded transfer amount remains authoritative.
+- Each transfer closes the preceding open period and reports its calculated net
+  beside the recorded transfer. A mismatch is reported as an error without an
+  invented adjustment. Entries after the last transfer remain in a trailing
+  open period.
 
 ## Preflight and apply
 

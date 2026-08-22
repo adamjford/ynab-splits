@@ -21,21 +21,38 @@ and external outcomes are in [../services/SPEC.md](../services/SPEC.md).
 
 - YNAB milliunits are converted at the integration boundary; local domain
   calculations use integer minor units and validated currency precision.
+  Conversion rejects unsafe values, unsupported decimal precision, and
+  milliunit amounts that cannot represent an exact minor unit. Linked plans
+  must have matching ISO currency and decimal precision.
+- An expense makes the nonpayer owe their share; an income or refund makes the
+  recipient owe the other member's share. Debt signs are stable across mixed
+  expense and income entries.
 - A settlement preview reports `owed`, `owes`, or `settled` and includes the
-  contributing entries. A zero-net preview closes without a YNAB copy.
-- Settlement selection and lifecycle rules require an inclusive valid date range,
-  real-payment acknowledgement, unsettled entries, and at most one active link
-  for each entry.
+  contributing entries. Voided entries are ignored. A zero-net preview closes
+  without a YNAB copy.
+- Settlement selection and lifecycle rules require an inclusive valid date
+  range, real-payment acknowledgement, unsettled entries, and at most one
+  active link for each entry.
 
 ## Settlement targets and manual splits
 
-- Simple targets use the net amount and Splitting category. Detailed targets
-  require destination category mappings, preserve parent totals, and use stable
-  line memos.
+- Simple targets use the signed net amount and Splitting category. Detailed
+  targets add mapped destination-category lines for positive debt and one
+  aggregate Splitting line for the opposite direction, preserve the parent
+  total, use stable line memos, and omit zero-value lines.
+- Missing or blank detailed destination mappings and blank Splitting categories
+  are rejected. An uncategorized source uses Splitting rather than inventing a
+  destination category.
 - Settlement import IDs are deterministic, URL-safe, and bounded for YNAB.
 - Existing YNAB subtransactions produce an explicit manual target. Preparation
-  preserves owner lines and replaces the counterparty line deterministically;
-  verification happens through the service gateway before local status changes.
+  preserves owner lines, their payees and memos, and replaces the counterparty
+  line deterministically. The target requires a nonempty integer allocation
+  totaling the owner's signed share.
+- Manual verification compares the parent identity when present, parent
+  amount, account, date, payee, approval state, and an order-independent
+  multiset of split lines including category, amount, payee, and memo. It
+  returns concrete differences rather than treating a partial match as
+  success.
 
 ## Acceptance criteria
 

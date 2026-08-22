@@ -75,12 +75,16 @@ Canonical contract locations:
 
 - `README.md` remains the application setup, operations, and safety contract.
   Link to it rather than copying its operational policy.
-- Root `SPEC.md` records application-wide behavioral invariants and indexes the
-  system specs.
+- Root `SPEC.md` records application-wide behavioral invariants, the ordered
+  member workflow, and indexes the system specs.
 - `app/domain/SPEC.md` records domain ledger, money, split, and settlement
   rules.
-- `app/services/SPEC.md` records request ownership, OAuth, YNAB settings,
-  inbox orchestration, shared projections, and remote verification.
+- `app/db/SPEC.md` records SQLite schema, migration, atomicity, ownership, and
+  idempotency rules.
+- `app/services/SPEC.md` records request ownership, OAuth, onboarding, YNAB
+  settings, inbox orchestration, shared projections, and remote verification.
+- `app/routes/SPEC.md` records route composition, accessibility, feedback, and
+  user-visible recovery.
 - `app/importer/SPEC.md` records the 2026 legacy importer contract.
 
 Every canonical spec is named exactly `SPEC.md` and lives beside the
