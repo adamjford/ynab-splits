@@ -10,7 +10,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const code = url.searchParams.get("code");
   if (!code) throw secureResponse(new Response("YNAB authorization was denied", { status: 400 }));
   const token = await exchangeCode(env, code, oauth.verifier);
-  const gateway = new HttpYnabGateway(token.access_token, token.refresh_token, Date.now() + token.expires_in * 1000, env.YNAB_CLIENT_ID, env.YNAB_CLIENT_SECRET);
+  const gateway = new HttpYnabGateway(token.access_token, token.refresh_token, Date.now() + token.expires_in * 1000, env.YNAB_CLIENT_ID, env.YNAB_CLIENT_SECRET, fetch, undefined, undefined, env.YNAB_API_ORIGIN, env.YNAB_OAUTH_ORIGIN);
   const ynabUser = await gateway.getUser();
   const db = database();
   try {

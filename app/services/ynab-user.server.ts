@@ -21,5 +21,5 @@ function createGateway(db: AppDatabase, userId: string, row: { encrypted_access_
     db.prepare("update oauth_connections set encrypted_access_token = ?, encrypted_refresh_token = ?, access_expires_at = ?, updated_at = CURRENT_TIMESTAMP where user_id = ?").run(encryptSecret(token.accessToken, env.TOKEN_ENCRYPTION_KEY), encryptSecret(token.refreshToken, env.TOKEN_ENCRYPTION_KEY), new Date(token.expiresAt).toISOString(), userId);
   }, async () => {
     db.prepare("update oauth_connections set disconnected_at = CURRENT_TIMESTAMP where user_id = ?").run(userId);
-  });
+  }, env.YNAB_API_ORIGIN, env.YNAB_OAUTH_ORIGIN);
 }

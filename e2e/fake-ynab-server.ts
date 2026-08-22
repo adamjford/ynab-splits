@@ -1,10 +1,12 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
 import { randomUUID } from "node:crypto";
 
 export type FakeIdentity = "adam" | "chelsea";
 export type FakeControl = "success" | "unauthorized" | "rate_limit" | "timeout" | "duplicate";
 
-export const FAKE_PORT = 4010;
+const FAKE_PORT_DEFAULT = 4010;
+const configuredFakePort = process.env.E2E_FAKE_PORT === undefined ? FAKE_PORT_DEFAULT : Number(process.env.E2E_FAKE_PORT);
+export const FAKE_PORT = configuredFakePort;
 export const FAKE_ORIGIN = `http://127.0.0.1:${FAKE_PORT}`;
 
 const identities: Record<FakeIdentity, {
@@ -79,16 +81,27 @@ type FakeTransaction = {
 };
 
 type ControlState = { mode: FakeControl; path: string | null };
+type FakeState = { control: ControlState; transactions: Record<string, FakeTransaction> };
 const initialTransactions = (): Record<string, FakeTransaction> => Object.fromEntries(Object.values(identities).flatMap((identity) => identity.transactions.map((transaction) => [transaction.id, structuredClone(transaction)])));
-const state: { control: ControlState; transactions: Record<string, FakeTransaction> } = {
-  control: { mode: "success", path: null },
-  transactions: initialTransactions(),
-};
+function createState(): FakeState {
+  return { control: { mode: "success", path: null }, transactions: initialTransactions() };
+}
 
-function resetState(): void {
+function resetState(state: FakeState): void {
   for (const id of Object.keys(state.transactions)) delete state.transactions[id];
   Object.assign(state.transactions, initialTransactions());
   state.control = { mode: "success", path: null };
+}
+
+export type FakeServerOptions = {
+  port?: number;
+  identity?: FakeIdentity;
+  onReset?: () => void;
+};
+
+function validPort(port: number): number {
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error(`fake YNAB port must be an integer from 1 to 65535, received ${port}`);
+  return port;
 }
 
 function identityFromToken(token: string | undefined): FakeIdentity | null {
@@ -111,7 +124,7 @@ async function body(request: IncomingMessage): Promise<Record<string, unknown>> 
   }
   try { return JSON.parse(text) as Record<string, unknown>; } catch { return {}; }
 }
-function shouldControl(path: string): FakeControl | null {
+function shouldControl(state: FakeState, path: string): FakeControl | null {
   if (state.control.path && path !== state.control.path) return null;
   return state.control.mode === "success" ? null : state.control.mode;
 }
@@ -129,11 +142,11 @@ function transactionFor(identity: FakeIdentity, transaction: FakeTransaction): F
   return { ...transaction, subtransactions: transaction.subtransactions.map((line) => ({ ...line })) };
 }
 
-function handleApi(request: IncomingMessage, response: ServerResponse, url: URL): void | Promise<void> {
+function handleApi(state: FakeState, request: IncomingMessage, response: ServerResponse, url: URL): void | Promise<void> {
   const auth = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
   const identity = identityFromToken(auth);
   if (!identity) return json(response, 401, { error: { id: "unauthorized", name: "Unauthorized", detail: "test-only" } });
-  const control = shouldControl(url.pathname);
+  const control = shouldControl(state, url.pathname);
   if (control === "unauthorized") return json(response, 401, { error: { id: "unauthorized", name: "Unauthorized" } });
   if (control === "rate_limit") return json(response, 429, { error: { id: "rate_limit", name: "Rate limited" } });
   if (control === "timeout") return new Promise<void>(() => undefined);
@@ -173,7 +186,7 @@ function handleApi(request: IncomingMessage, response: ServerResponse, url: URL)
       const target = (payload.transaction ?? {}) as Partial<FakeTransaction>;
       const importId = typeof target.import_id === "string" ? target.import_id : null;
       const existing = importId ? Object.values(state.transactions).find((transaction) => transaction.account_id === item.accountId && transaction.import_id === importId) : undefined;
-      if (existing || shouldControl(url.pathname) === "duplicate") return json(response, 200, { data: { transaction_ids: [], duplicate_import_ids: importId ? [importId] : ["duplicate"] } });
+      if (existing || shouldControl(state, url.pathname) === "duplicate") return json(response, 200, { data: { transaction_ids: [], duplicate_import_ids: importId ? [importId] : ["duplicate"] } });
       const id = `fake-created-${randomUUID()}`;
       const transaction: FakeTransaction = {
         id,
@@ -198,36 +211,52 @@ function handleApi(request: IncomingMessage, response: ServerResponse, url: URL)
   return json(response, 404, { error: { id: "not_found", name: "Not found" } });
 }
 
-async function handle(request: IncomingMessage, response: ServerResponse, onReset?: () => void): Promise<void> {
- const url = new URL(request.url ?? "/", FAKE_ORIGIN);
- if (url.pathname === "/__health") return json(response, 200, { ok: true });
- if (url.pathname === "/__reset" && request.method === "POST") {
- resetState();
- onReset?.();
- return json(response, 200, { ok: true });
- }
- if (url.pathname === "/__control" && request.method === "POST") {
- const payload = await body(request);
- const mode = payload.mode;
- if (mode !== "success" && mode !== "unauthorized" && mode !== "rate_limit" && mode !== "timeout" && mode !== "duplicate") return json(response, 400, { error: "unsupported test control" });
- state.control = { mode, path: typeof payload.path === "string" ? payload.path : null };
- return json(response, 200, state.control);
- }
+async function handle(state: FakeState, origin: string, identity: FakeIdentity, request: IncomingMessage, response: ServerResponse, onReset?: () => void): Promise<void> {
+  const url = new URL(request.url ?? "/", origin);
+  if (url.pathname === "/__health") return json(response, 200, { ok: true });
+  if (url.pathname === "/__reset" && request.method === "POST") {
+    resetState(state);
+    onReset?.();
+    return json(response, 200, { ok: true });
+  }
+  if (url.pathname === "/__control" && request.method === "POST") {
+    const payload = await body(request);
+    const mode = payload.mode;
+    if (mode !== "success" && mode !== "unauthorized" && mode !== "rate_limit" && mode !== "timeout" && mode !== "duplicate") return json(response, 400, { error: "unsupported test control" });
+    state.control = { mode, path: typeof payload.path === "string" ? payload.path : null };
+    return json(response, 200, state.control);
+  }
+  if (url.pathname === "/oauth/authorize" && request.method === "GET") {
+    const redirectUri = url.searchParams.get("redirect_uri");
+    if (!redirectUri) return json(response, 400, { error: "redirect_uri is required" });
+    let callback: URL;
+    try { callback = new URL(redirectUri); } catch { return json(response, 400, { error: "redirect_uri must be absolute" }); }
+    callback.searchParams.set("code", `fake-code-${identity}`);
+    callback.searchParams.set("state", url.searchParams.get("state") ?? "");
+    response.statusCode = 302;
+    response.setHeader("Location", callback.toString());
+    response.end();
+    return;
+  }
   if (url.pathname === "/oauth/token" && request.method === "POST") {
     const payload = await body(request);
     const code = String(payload.code ?? "");
-    const identity: FakeIdentity | null = code === "fake-code-adam" ? "adam" : code === "fake-code-chelsea" ? "chelsea" : null;
-    if (!identity) return json(response, 401, { error: "invalid_grant" });
-    return json(response, 200, { access_token: `fake-access-${identity}`, refresh_token: `fake-refresh-${identity}`, expires_in: 3600 });
+    const tokenIdentity: FakeIdentity | null = code === "fake-code-adam" ? "adam" : code === "fake-code-chelsea" ? "chelsea" : null;
+    if (!tokenIdentity) return json(response, 401, { error: "invalid_grant" });
+    return json(response, 200, { access_token: `fake-access-${tokenIdentity}`, refresh_token: `fake-refresh-${tokenIdentity}`, expires_in: 3600 });
   }
-  if (url.pathname.startsWith("/v1/")) { await handleApi(request, response, url); return; }
+  if (url.pathname.startsWith("/v1/")) { await handleApi(state, request, response, url); return; }
   json(response, 404, { error: "not_found" });
 }
 
-export function startFakeYnabServer(onReset?: () => void): { server: ReturnType<typeof createServer>; origin: string } {
-  const server = createServer((request, response) => { void handle(request, response, onReset).catch(() => json(response, 500, { error: "fake service failure" })); });
-  server.listen(FAKE_PORT, "127.0.0.1");
-  return { server, origin: FAKE_ORIGIN };
+export function startFakeYnabServer(options: FakeServerOptions = {}): { server: Server; origin: string } {
+  const port = validPort(options.port ?? FAKE_PORT);
+  const identity = options.identity ?? "adam";
+  const origin = `http://127.0.0.1:${port}`;
+  const state = createState();
+  const server = createServer((request, response) => { void handle(state, origin, identity, request, response, options.onReset).catch(() => json(response, 500, { error: "fake service failure" })); });
+  server.listen(port, "127.0.0.1");
+  return { server, origin };
 }
 
 if (process.argv[1]?.endsWith("fake-ynab-server.ts")) {

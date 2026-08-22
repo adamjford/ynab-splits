@@ -7,18 +7,38 @@ read-back outcomes. Domain allocation and settlement value rules are in
 [../../SPEC.md](../../SPEC.md). Operational setup, callback registration,
 secrets, and safety policy remain in [README.md](../../README.md).
 
-## Runtime database path
+## Runtime database path and development instances
 
-- Application and migration processes use the explicit `DATABASE_PATH` supplied
-  by their runtime environment.
-- The importer requires an environment name and selects `DATABASE_PATH` from
-  the matching `.env.development`/`.env` or `.env.production` file. It accepts
-  an externally supplied `DATABASE_PATH` only when no matching file exists.
-- Development and production use different SQLite paths. The development
-  example uses `./data/ynab-splits-development.sqlite`; production uses a
-  separately configured persistent path such as
-  `/var/lib/ynab-splits/ynab-splits-production.sqlite`.
-- No process silently falls back to an ambiguous shared database path.
+- Every application and migration process requires an explicit `DATABASE_PATH`;
+  a missing value fails before the process opens SQLite, and no process falls
+  back to an ambiguous shared path.
+- The importer still requires an environment name and selects `DATABASE_PATH`
+  from the matching `.env.development`/`.env` or `.env.production` file. It
+  accepts an externally supplied path only when no matching file exists, and
+  production never selects the development file.
+- A development process requires a validated instance ID/slug. Empty,
+  malformed, separator-containing, and traversal-like IDs fail before paths,
+  secrets, or listeners are created.
+- An instance ID derives distinct development HTTP origins and ports, a SQLite
+  path, and session and token-encryption secrets.
+- On the same host, two IDs must resolve to distinct paths and ports; a port or
+  path collision fails rather than sharing another instance's state.
+- Authentication and OAuth cookie names are instance-namespaced, so a cookie
+  from one instance cannot authenticate to another.
+- The database stores the instance owner ID in runtime metadata outside
+  household, member, ledger, and other product-domain tables. A new database
+  records its owner on first open; a matching owner reopens normally. A legacy
+  database may first apply the explicit v4 owner-metadata migration, after
+  which a different owner fails closed before normal product reads or writes.
+  No product reads or writes occur and no owner is silently adopted.
+- An unmarked or malformed owner marker requires explicit initialization for
+  the current instance and is never silently adopted.
+- Development and E2E fixtures may inject fake API and OAuth origins. Their
+  fake service state and configurable HTTP ports are per run; the launcher and
+  seed/reset helpers use separate fixture data and never the product database.
+- Production retains explicit persistent `DATABASE_PATH` selection and real
+  YNAB API/OAuth origins by default. Development-derived secrets, fake origins,
+  and shared or implicit database paths are not production fallbacks.
 
 ## OAuth and member-owned YNAB connections
 
@@ -138,7 +158,10 @@ secrets, and safety policy remain in [README.md](../../README.md).
 | Onboarding, source updates, and manual verification | `app/routes/onboarding.tsx`, `app/routes/invite.tsx`, `app/services/inbox-orchestration.server.ts`, `app/services/ynab-verification.server.ts` | `app/routes/onboarding.test.tsx`, `app/services/inbox-orchestration.test.ts`, `app/services/ynab-verification.test.ts`, `e2e/app.spec.ts` |
 | Settlement posting, owner recovery, void, and restore | `app/routes/settlement-detail.tsx`, `app/domain/settlement-posting.ts`, `app/services/ynab-verification.server.ts` | `app/domain/settlement-posting.test.ts`, `app/services/ynab-verification.test.ts`, `e2e/app.spec.ts`, `e2e/settlement-interactions.spec.ts` |
 
-| Runtime database selection and migration safety | `app/services/env.server.ts`, `app/services/request.server.ts`, `scripts/migrate.ts`, `scripts/import-2026.ts` | `app/services/env.test.ts`, `app/importer/legacy2026-apply.test.ts` |
+| Instance validation, per-instance environment, paths, ports, and production guards | `app/services/env.server.ts`, `scripts/dev-instance.ts`, `scripts/migrate.ts`, `scripts/import-2026.ts` | `app/services/env.test.ts`, `app/importer/legacy2026-apply.test.ts`, `e2e/app.spec.ts` |
+| Instance-namespaced sessions and request ownership | `app/services/session.server.ts`, `app/services/request.server.ts` | `app/services/request.server.test.ts`, `e2e/app.spec.ts` |
+| Database owner marker, mismatch failure, and migration safety | `app/db/database.server.ts`, `scripts/dev-seed.ts`, `scripts/dev-reset.ts`, `scripts/migrate.ts` | `app/db/database.test.ts`, `app/db/migration-behavior.test.ts`, `e2e/app.spec.ts` |
+| Injectable API/OAuth origins and isolated fake-service ports/state | `app/services/auth.server.ts`, `app/services/ynab.server.ts`, `e2e/fake-fetch.mjs`, `e2e/fake-ynab-server.ts`, `e2e/test-server.ts` | `app/services/auth.test.ts`, `app/services/ynab-verification.test.ts`, `e2e/app.spec.ts`, `e2e/action-feedback.spec.ts` |
 
 The dedicated auth tests exercise the injected OAuth transport and encrypted
 connection persistence without contacting real external services.

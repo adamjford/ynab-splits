@@ -55,6 +55,7 @@ function makeLegacyFile(withSnapshot: boolean): string {
       DROP TABLE ynab_transaction_decisions_current;
     `);
   }
+  raw.exec("DROP TABLE runtime_metadata");
   raw.exec("DROP TABLE schema_migrations");
   raw.close();
   return filename;
@@ -99,13 +100,44 @@ describe("ordered SQLite migrations and ledger invariants", () => {
     const directory = mkdtempSync(join(tmpdir(), "ynab-version-")); paths.push(directory);
     const filename = join(directory, "schema.sqlite");
     const db = createDatabase(filename);
-    expect(getSchemaVersion(db)).toBe(3);
-    expect(db.prepare("select version from schema_migrations order by version").all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+    expect(getSchemaVersion(db)).toBe(4);
+    expect(db.prepare("select version from schema_migrations order by version").all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }]);
     db.close();
     const reopened = createDatabase(filename);
-    expect(getSchemaVersion(reopened)).toBe(3);
-    expect(reopened.prepare("select count(*) as count from schema_migrations").get()).toEqual({ count: 3 });
+    expect(getSchemaVersion(reopened)).toBe(4);
+    expect(reopened.prepare("select count(*) as count from schema_migrations").get()).toEqual({ count: 4 });
     reopened.close();
+  });
+  it("initializes and enforces an instance owner marker without touching product tables", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ynab-owner-")); paths.push(directory);
+    const filename = join(directory, "owned.sqlite");
+    const ownerless = createDatabase(filename);
+    expect(ownerless.prepare("select count(*) as count from runtime_metadata").get()).toEqual({ count: 0 });
+    ownerless.close();
+
+    const owned = createDatabase(filename, "instance-a");
+    expect(owned.prepare("select key, value from runtime_metadata").all()).toEqual([{ key: "database_owner", value: "instance-a" }]);
+    expect(owned.prepare("select name from sqlite_master where type = 'table' and name = 'runtime_metadata'").get()).toBeTruthy();
+    expect(owned.prepare("select name from sqlite_master where type = 'table' and name = 'users'").get()).toBeTruthy();
+    owned.close();
+
+    const reopened = createDatabase(filename, "instance-a");
+    reopened.close();
+    expect(() => createDatabase(filename, "instance-b")).toThrow(/owner/i);
+  });
+
+  it("rejects malformed owner markers and malformed owner IDs", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ynab-owner-malformed-")); paths.push(directory);
+    const filename = join(directory, "malformed.sqlite");
+    const db = createDatabase(filename);
+    db.close();
+    const raw = new Database(filename);
+    raw.prepare("insert into runtime_metadata (key, value) values (?, ?)").run("database_owner", "bad owner");
+    raw.close();
+    expect(() => createDatabase(filename, "instance-a")).toThrow(/malformed/i);
+
+    const unmarked = join(directory, "invalid-owner.sqlite");
+    expect(() => createDatabase(unmarked, "bad owner")).toThrow(/malformed/i);
   });
 
   it("enforces complete two-member ledger groups and allows zero shares", () => {
@@ -132,7 +164,6 @@ describe("ordered SQLite migrations and ledger invariants", () => {
     expect(columns.map((row) => row.name)).toEqual(["user_id", "source_category_id", "source_category_name", "destination_category_id", "destination_category_name"]);
     const indexes = db.prepare("pragma index_list(category_assignments)").all() as Array<{ origin: string }>;
     expect(indexes.some((row) => row.origin === "pk")).toBe(true);
-    db.close();
   });
 
   it("upgrades recognized v1 and v2 legacy schemas and preserves rows", () => {
@@ -140,7 +171,7 @@ describe("ordered SQLite migrations and ledger invariants", () => {
       const filename = makeLegacyFile(withSnapshot);
       seedLegacyRows(filename);
       const db = createDatabase(filename);
-      expect(getSchemaVersion(db)).toBe(3);
+      expect(getSchemaVersion(db)).toBe(4);
       expect(db.prepare("select source_category_id, destination_category_id from category_assignments").all()).toEqual([
         { source_category_id: "source-1", destination_category_id: "source-1" },
       ]);

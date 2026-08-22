@@ -20,6 +20,19 @@ application contract is in [../../SPEC.md](../../SPEC.md).
   member-safe navigation and logout control while leaving YNAB identifiers,
   posting controls, and manual-task controls visible only to their owner.
 
+## Development diagnostics and instance identity
+
+- In development, `GET /__dev/health` returns only the safe readiness payload
+  `{ ok: true, instanceId, origin }`. It never exposes secrets, database
+  paths, fake-service state, or operational health details, and the route is
+  disabled in production.
+- When `INSTANCE_LABEL` is non-empty, the authenticated shell renders the
+  accessible non-secret label `Instance: <label>`. An empty label adds no
+  instance marker. Auth and OAuth cookies are
+  `${COOKIE_PREFIX}_auth` and `${COOKIE_PREFIX}_oauth`, preventing a
+  same-host session from crossing instance boundaries. Instance identity is
+  runtime metadata only and does not change household or member authorization.
+
 ## Navigation and accessibility
 
 - Every authenticated top-level destination is registered in
@@ -66,11 +79,19 @@ application contract is in [../../SPEC.md](../../SPEC.md).
    rendered shared views.
 4. Expected financial, authorization, stale/conflict, and database failures
    remain explicit and actionable at the route surface.
+5. Development `GET /__dev/health` exposes only `{ ok, instanceId, origin }`,
+   is unavailable in production, and never exposes secrets or operational
+   paths.
+6. A non-empty `INSTANCE_LABEL` renders as the accessible `Instance: <label>`
+   marker in the authenticated shell; an empty label renders no marker.
+7. Auth and OAuth cookies use the configured instance prefix and cannot
+   authenticate a different same-host instance.
 
 ## Implementation and test map
 
 | Contract section | Implementation | Focused evidence |
 | --- | --- | --- |
+| Development diagnostics and instance label | `app/routes.ts`, `app/routes/dev-health.tsx`, `app/routes/app-layout.tsx`, `app/services/env.server.ts` | `app/services/env.test.ts`, `e2e/test-server.ts`, `e2e/app.spec.ts` |
 | Public, onboarding, and authenticated route composition | `app/routes.ts`, `app/routes/app-layout.tsx`, `app/routes/auth.start.tsx`, `app/routes/auth.callback.tsx`, `app/routes/invite.tsx`, `app/routes/onboarding.tsx` | `app/routes/onboarding.test.tsx`, `e2e/app.spec.ts`, `e2e/action-feedback.spec.ts` |
 | Shared navigation and current-route matching | `app/navigation.ts`, `app/routes/app-layout.tsx` | `app/navigation.test.ts`, `e2e/navigation.spec.ts` |
 | Quick navigation keyboard, filtering, and focus | `app/components/QuickNavigation.tsx` | `e2e/navigation.spec.ts` |

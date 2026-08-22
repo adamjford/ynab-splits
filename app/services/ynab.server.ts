@@ -82,8 +82,8 @@ export class YnabTransportError extends Error {
   }
 }
 
-const API_ORIGIN = "https://api.ynab.com/v1";
-const TOKEN_URL = "https://app.ynab.com/oauth/token";
+const DEFAULT_API_ORIGIN = "https://api.ynab.com/v1";
+const DEFAULT_OAUTH_ORIGIN = "https://app.ynab.com";
 const REQUEST_TIMEOUT_MS = 15_000;
 const nonEmptyId = z.string().trim().min(1);
 const milliunits = z.number().finite().int();
@@ -140,6 +140,8 @@ export class HttpYnabGateway implements YnabGateway {
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly onTokenRefresh?: (token: TokenState) => Promise<void>,
     private readonly onUnauthorized?: () => Promise<void>,
+    private readonly apiOrigin: string = DEFAULT_API_ORIGIN,
+    private readonly oauthOrigin: string = DEFAULT_OAUTH_ORIGIN,
   ) {
     this.token = { accessToken, refreshToken, expiresAt };
   }
@@ -194,7 +196,7 @@ export class HttpYnabGateway implements YnabGateway {
     await this.refreshIfNeeded();
     let response: Response;
     try {
-      response = await this.fetchWithTimeout(`${API_ORIGIN}${path}`, {
+      response = await this.fetchWithTimeout(`${this.apiOrigin}${path}`, {
         ...init,
         headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${this.token.accessToken}`, ...(init.headers ?? {}) },
       });
@@ -244,7 +246,7 @@ export class HttpYnabGateway implements YnabGateway {
     if (this.token.expiresAt > Date.now() + 60_000) return;
     let response: Response;
     try {
-      response = await this.fetchWithTimeout(TOKEN_URL, {
+      response = await this.fetchWithTimeout(new URL("/oauth/token", this.oauthOrigin), {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({ client_id: this.clientId, client_secret: this.clientSecret, grant_type: "refresh_token", refresh_token: this.token.refreshToken }),

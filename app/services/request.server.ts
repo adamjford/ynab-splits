@@ -7,7 +7,7 @@ import { readAuthUserId } from "./session.server";
 export function database(): AppDatabase {
   const env = getEnv();
   mkdirSync(dirname(env.DATABASE_PATH), { recursive: true });
-  return createDatabase(env.DATABASE_PATH);
+  return createDatabase(env.DATABASE_PATH, env.INSTANCE_ID);
 }
 
 export function authenticatedUser(request: Request, db: AppDatabase): { id: string; displayName: string; householdId: string; memberKey: "adam" | "chelsea" } {

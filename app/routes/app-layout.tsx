@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Form, Link, Outlet, useLocation } from "react-router";
 import type { Route } from "./+types/app-layout";
 import { authenticatedUser, database } from "~/services/request.server";
+import { getEnv } from "~/services/env.server";
 import { secureData, secureRedirect } from "~/services/response.server";
 import { APP_DESTINATIONS, DASHBOARD_DESTINATION, isDestinationCurrent } from "~/navigation";
 import { QuickNavigation } from "~/components/QuickNavigation";
@@ -9,7 +10,8 @@ import { Button } from "~/components/Button";
 export function loader({ request }: Route.LoaderArgs) {
   const db = database();
   try {
-    return secureData(authenticatedUser(request, db));
+    const user = authenticatedUser(request, db);
+    return secureData({ ...user, instanceLabel: getEnv().INSTANCE_LABEL });
   } catch (error) {
     if (error instanceof Response && error.status === 401) throw secureRedirect("/auth/ynab/start");
     if (error instanceof Response && error.status === 409) throw secureRedirect("/onboarding");
@@ -54,6 +56,7 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
             >{destination.label}</Link>;
           })}
           <span className="px-2 text-slate-500">{loaderData.displayName}</span>
+          {loaderData.instanceLabel ? <span className="px-2 text-slate-500" aria-label={`Active development instance: ${loaderData.instanceLabel}`}>Instance: {loaderData.instanceLabel}</span> : null}
           <QuickNavigation />
           <Form method="post" action="/logout">
             <Button variant="secondary" type="submit">Log out</Button>

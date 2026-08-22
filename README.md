@@ -42,6 +42,55 @@ and generated handoff material out of Git. The repository's ignore rules
 include environment files, database files, CSVs, and
 `/YNAB_*_HANDOFF.md`.
 
+### Concurrent development instances
+
+The direct `pnpm dev` workflow above remains supported for the default
+instance. For concurrent worktrees, use the instance launcher with a validated
+slug:
+
+```bash
+pnpm dev:instance -- --id alice
+pnpm dev:instance -- --id bob
+```
+Optional `--label`, `--port`, `--fake-port`, and test-only `--identity`
+arguments select the visible label, explicit loopback ports, and fake-service
+identity. Without a label, the launcher uses the instance ID as its label and
+derives `COOKIE_PREFIX=ynab_splits_<id>`.
+
+Each launcher allocates a distinct loopback app/fake-service port, sets
+`INSTANCE_ID`, `INSTANCE_LABEL`, `COOKIE_PREFIX`, `DATABASE_PATH`,
+`YNAB_API_ORIGIN`, and `YNAB_OAUTH_ORIGIN`, and starts `pnpm dev`. Its
+disposable database, per-instance secrets, fake-service metadata, seed files,
+and reset state live only under the ignored
+`.local/instances/<validated-id>/` directory. The launcher rejects empty,
+absolute, traversal, or otherwise invalid IDs and refuses an origin/port
+collision. It does not print secrets.
+
+The launcher and fixture safety boundaries are implemented in
+`scripts/dev-instance.ts`, `scripts/dev-seed.ts`, and `scripts/dev-reset.ts`;
+the fake OAuth/API service is `e2e/fake-ynab-server.ts`.
+
+Use only the instance-scoped helpers for fixture state:
+
+```bash
+pnpm dev:seed -- --id alice
+pnpm dev:reset -- --id alice
+```
+
+Both commands validate the ID and stay below `.local/instances/`; they never
+read, migrate, or reset `data/` or another instance's state. Development fake
+OAuth/API origins are test-only. The production defaults remain
+`https://api.ynab.com/v1` and `https://app.ynab.com`, with explicit
+`DATABASE_PATH` and real credentials required for production.
+
+When `INSTANCE_LABEL` is non-empty, the authenticated shell displays the
+non-secret `Instance: <label>` diagnostic. Development exposes
+`/__dev/health`, returning only `{ ok, instanceId, origin }`; it is disabled in
+production. Same-host auth and OAuth cookies are named
+`${COOKIE_PREFIX}_auth` and `${COOKIE_PREFIX}_oauth`, so one instance's
+cookies are not accepted by another. A database opened with a different
+recorded owner ID fails before normal reads or writes.
+
 ### Environment
 
 `.env.example` documents the local development variables and
@@ -61,6 +110,14 @@ before running migrations:
 - `TOKEN_ENCRYPTION_KEY`: exactly 32 bytes in the current raw-key format. Generate it with `openssl rand -hex 16`.
 - `YNAB_CLIENT_ID` and `YNAB_CLIENT_SECRET`: credentials from the YNAB developer console.
 - `HOST` and `PORT`: bind address and HTTP port.
+- `INSTANCE_ID`: validated runtime slug, default `default`; the launcher
+  supplies a distinct value for each development process.
+- `INSTANCE_LABEL`: optional non-secret label shown by the development shell.
+- `COOKIE_PREFIX`: auth/OAuth cookie namespace, default `ynab_splits`; launcher
+  makes it instance-specific.
+- `YNAB_API_ORIGIN` and `YNAB_OAUTH_ORIGIN`: YNAB API/OAuth origins. Production
+  defaults are `https://api.ynab.com/v1` and `https://app.ynab.com`; development
+  launchers override both with their fake origin.
 
 Do not use the sample values from `.env.example` in a running environment. Treat both secrets and the YNAB client secret as production credentials; never paste them into issues, logs, fixtures, or browser tests.
 
@@ -177,6 +234,22 @@ pnpm test:e2e
 ```
 
 `pnpm test:e2e` uses `playwright.config.ts` and is intended for a local fake OAuth/YNAB service or a test-only server, never real YNAB credentials or a real household database. The push/pull-request workflow installs Chromium when browser tests are present and runs lint, typecheck, coverage, and the production build with frozen pnpm dependencies.
+
+For concurrent E2E runs, assign each run distinct app and fake-service ports
+with `E2E_APP_PORT` and `E2E_FAKE_PORT`:
+
+```bash
+E2E_APP_PORT=4311 \
+E2E_FAKE_PORT=4310 \
+pnpm test:e2e
+```
+
+`playwright.config.ts` derives the app base URL from `E2E_APP_PORT`, and
+`e2e/test-server.ts` starts the per-run fake service from
+`e2e/fake-ynab-server.ts`/`e2e/fake-fetch.mjs` using `E2E_FAKE_PORT`. The fake
+OAuth/API state is isolated per run. These tests must use the fake service and
+test-only credentials; never point either port at a real YNAB origin or
+operational database.
 
 For a production smoke check, build and run against a temporary database and test-only credentials:
 

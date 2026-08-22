@@ -1,13 +1,24 @@
-/* global process, URL */
+/* global process, URL, Request */
 const targetOrigin = process.env.E2E_FAKE_YNAB_ORIGIN;
 if (targetOrigin) {
+  const apiTargetOrigin = process.env.E2E_FAKE_API_ORIGIN ?? targetOrigin;
+  const oauthTargetOrigin = process.env.E2E_FAKE_OAUTH_ORIGIN ?? targetOrigin;
   const originalFetch = globalThis.fetch.bind(globalThis);
   globalThis.fetch = (input, init) => {
     const source = typeof input === "string" || input instanceof URL ? String(input) : input.url;
     let target = source;
-    if (source.startsWith("https://api.ynab.com/v1/")) target = `${targetOrigin}${new URL(source).pathname}${new URL(source).search}`;
-    if (source === "https://app.ynab.com/oauth/token") target = `${targetOrigin}/oauth/token`;
+    try {
+      const sourceUrl = new URL(source);
+      if (sourceUrl.origin === "https://api.ynab.com" && (sourceUrl.pathname === "/v1" || sourceUrl.pathname.startsWith("/v1/"))) {
+        target = `${apiTargetOrigin}${sourceUrl.pathname}${sourceUrl.search}`;
+      } else if (sourceUrl.origin === "https://app.ynab.com" && sourceUrl.pathname === "/oauth/token") {
+        target = `${oauthTargetOrigin}/oauth/token${sourceUrl.search}`;
+      }
+    } catch {
+      return originalFetch(input, init);
+    }
     if (target === source) return originalFetch(input, init);
-    return originalFetch(target, init);
+    if (typeof input === "string" || input instanceof URL) return originalFetch(target, init);
+    return originalFetch(target, init ? new Request(input, init) : input);
   };
 }
