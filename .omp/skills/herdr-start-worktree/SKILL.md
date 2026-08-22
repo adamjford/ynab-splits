@@ -69,7 +69,7 @@ workspace ID or interpret this failure as a Git branch problem.
 6. Prompt the child using Herdr, without a completion wait:
 
    ```bash
-   herdr agent prompt omp-<worktree_name> '<complete child prompt>' --timeout 30000
+   herdr agent prompt omp-<worktree_name> '<complete child prompt>'
    ```
 
    Do not add `--wait`; do not run `herdr agent wait`; do not poll pane output.
