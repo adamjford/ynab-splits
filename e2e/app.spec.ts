@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { FAKE_ORIGIN } from "./fake-ynab-server";
-import { configurePlan, newContext, resetFakeYnab, signIn } from "./test-helpers";
+import { configurePlan, newContext, resetFakeYnab, signIn, waitForHydration } from "./test-helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -42,6 +42,7 @@ test("reviews an inbox transaction, creates a zero-net settlement, and restores 
   await signIn(page, "adam", "Adam", baseURL!);
   await configurePlan(page, "adam");
   await page.goto("/inbox");
+  await waitForHydration(page);
   await expect(page.getByRole("heading", { name: "Unapproved transactions" })).toBeVisible();
   await expect(page.getByText("Local market")).toBeVisible();
   const review = page.getByRole("article").filter({ hasText: "Local market" });
@@ -52,6 +53,7 @@ test("reviews an inbox transaction, creates a zero-net settlement, and restores 
   await expect(page.getByText("No unapproved transactions require review.")).toBeVisible();
 
   await page.goto("/ledger");
+  await waitForHydration(page);
   await expect(page.getByRole("heading", { name: "Ledger" })).toBeVisible();
   await expect(page.getByText("Local market")).toBeVisible();
 
@@ -61,12 +63,14 @@ test("reviews an inbox transaction, creates a zero-net settlement, and restores 
   const settlementId = /"settlementId","([^"]+)"/.exec(createBody)?.[1];
   expect(settlementId).toEqual(expect.any(String));
   await page.goto(`/settlements/${settlementId}`);
+  await waitForHydration(page);
   await expect(page.getByText(/2026-08-01 through 2026-08-01/)).toBeVisible();
   await expect(page.getByText(/· 0 · closed/)).toBeVisible();
 
   const voided = await page.request.post(`${baseURL}/settlements/${settlementId}.data`, { form: { intent: "void", confirmVoid: "on" }, headers: { Accept: "application/json" } });
   expect(voided.ok()).toBeTruthy();
   await page.goto(`/settlements/${settlementId}`);
+  await waitForHydration(page);
   await expect(page.getByText(/· voided/)).toBeVisible();
   await page.getByRole("button", { name: "Restore settlement" }).click();
   await expect(page.getByText(/· 0 · closed/)).toBeVisible();

@@ -1,6 +1,10 @@
 import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { FAKE_ORIGIN, type FakeIdentity } from "./fake-ynab-server";
 
+export async function waitForHydration(page: Page): Promise<void> {
+  await page.locator("html[data-hydrated='true']").waitFor({ state: "attached" });
+}
+
 export async function installFakeOAuth(page: Page, identity: FakeIdentity): Promise<void> {
   await page.context().route("**/invite/**", async (route) => {
     const upstream = await route.fetch({ maxRedirects: 0 });
@@ -25,6 +29,7 @@ export async function installFakeOAuth(page: Page, identity: FakeIdentity): Prom
 export async function signIn(page: Page, identity: FakeIdentity, displayName: string, _baseURL: string, startPath = "/auth/ynab/start"): Promise<void> {
   await installFakeOAuth(page, identity);
   await page.goto(startPath);
+  await waitForHydration(page);
   if (/\/onboarding/.test(page.url())) {
     await page.getByLabel("Ledger display name").fill(displayName);
     await page.getByRole("button", { name: "Continue" }).click();
@@ -36,6 +41,7 @@ export async function signIn(page: Page, identity: FakeIdentity, displayName: st
 export async function configurePlan(page: Page, identity: FakeIdentity): Promise<void> {
   const suffix = identity;
   await page.goto("/settings/ynab");
+  await waitForHydration(page);
   await page.getByLabel("Plan ID").fill(`fake-plan-${suffix}`);
   await page.getByLabel("Settlement account ID").fill(`fake-account-${suffix}`);
   await page.getByLabel("Splitting category ID").fill(`fake-category-splitting-${suffix}`);

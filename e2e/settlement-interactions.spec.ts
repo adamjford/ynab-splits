@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { configurePlan, newContext, resetFakeYnab, signIn } from "./test-helpers";
+import { configurePlan, newContext, resetFakeYnab, signIn, waitForHydration } from "./test-helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -7,6 +7,7 @@ const settlementError = "Confirm that the real payment occurred before creating 
 
 async function reviewPositiveLedgerEntry(page: Page): Promise<void> {
   await page.goto("/inbox");
+  await waitForHydration(page);
   await expect(page.getByRole("heading", { name: "Unapproved transactions" })).toBeVisible();
   const review = page.getByRole("article").filter({ hasText: "Local market" });
   await review.getByLabel("Split type").selectOption("exact");
@@ -19,6 +20,7 @@ async function reviewPositiveLedgerEntry(page: Page): Promise<void> {
 
 async function createPositiveSettlement(page: Page, baseURL: string): Promise<string> {
   await page.goto("/settlements/new");
+  await waitForHydration(page);
   await page.getByLabel("Start date").fill("2026-08-01");
   await page.getByLabel("End date").fill("2026-08-01");
   const confirmation = page.getByRole("checkbox", { name: "I confirm the real payment occurred." });
@@ -48,6 +50,7 @@ test("focuses repeated settlement errors and the created-settlement link", async
     await reviewPositiveLedgerEntry(page);
 
     await page.goto("/settlements/new");
+    await waitForHydration(page);
     await page.getByLabel("Start date").fill("2026-08-01");
     await page.getByLabel("End date").fill("2026-08-01");
     const create = page.getByRole("button", { name: "Create settlement" });
@@ -94,6 +97,7 @@ test("focuses settlement copy and restore feedback", async ({ browser, baseURL }
 
     const settlementId = await createPositiveSettlement(page, baseURL!);
     await page.goto(`/settlements/${settlementId}`);
+    await waitForHydration(page);
     await expect(page.getByText(/2026-08-01 through 2026-08-01/)).toBeVisible();
     await expect(page.getByText(/· 944 · closed/)).toBeVisible();
 
@@ -115,6 +119,7 @@ test("focuses settlement copy and restore feedback", async ({ browser, baseURL }
     });
     expect(voided.ok()).toBeTruthy();
     await page.goto(`/settlements/${settlementId}`);
+    await waitForHydration(page);
     await expect(page.getByText(/· 944 · voided/)).toBeVisible();
 
     const restore = page.getByRole("button", { name: "Restore settlement" });

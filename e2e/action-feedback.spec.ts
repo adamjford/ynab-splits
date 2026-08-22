@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { configurePlan, newContext, resetFakeYnab, signIn } from "./test-helpers";
+import { configurePlan, newContext, resetFakeYnab, signIn, waitForHydration } from "./test-helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -31,6 +31,7 @@ test("focuses settings feedback without shell route focus", async ({ browser, ba
     await signIn(page, "adam", "Adam", baseURL!);
     await configurePlan(page, "adam");
     await page.goto("/settings/ynab");
+    await waitForHydration(page);
 
     const saveButton = page.getByRole("button", { name: "Save settings" });
     await saveButton.focus();
@@ -54,6 +55,7 @@ test("focuses inbox feedback after keyboard save", async ({ browser, baseURL }) 
     await signIn(page, "adam", "Adam", baseURL!);
     await configurePlan(page, "adam");
     await page.goto("/inbox");
+    await waitForHydration(page);
 
     const review = page.getByRole("article").filter({ hasText: "Local market" });
     const splitType = review.getByLabel("Split type");

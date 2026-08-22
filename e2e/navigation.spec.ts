@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
-import { configurePlan, newContext, resetFakeYnab, signIn } from "./test-helpers";
+import { configurePlan, newContext, resetFakeYnab, signIn, waitForHydration } from "./test-helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -17,9 +17,11 @@ async function signedInPage(browser: Browser, baseURL: string, viewport?: Viewpo
 async function ensureLocalMarketEntry(page: Page): Promise<void> {
   await configurePlan(page, "adam");
   await page.goto("/ledger");
+  await waitForHydration(page);
   const existingEntry = page.getByRole("link", { name: "Local market", exact: true });
   if (await existingEntry.count() > 0) return;
   await page.goto("/inbox");
+  await waitForHydration(page);
   const review = page.getByRole("article").filter({ hasText: "Local market" });
   await review.getByLabel("Split type").selectOption("exact");
   await review.getByLabel("Other share (minor units)").fill("0");
@@ -95,6 +97,7 @@ test("supports skip navigation and current-section semantics", async ({ browser,
   const { context, page } = await signedInPage(browser, baseURL!, { width: 390, height: 844 });
   try {
     await page.goto("/");
+    await waitForHydration(page);
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press("Tab");
     const skip = page.getByRole("link", { name: "Skip to main content", exact: true });
@@ -116,6 +119,7 @@ test("supports skip navigation and current-section semantics", async ({ browser,
     await expect(main).not.toBeFocused();
 
     await page.reload();
+    await waitForHydration(page);
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press("Tab");
     await expect(skip).toBeFocused();
@@ -131,6 +135,7 @@ test("supports skip navigation and current-section semantics", async ({ browser,
 
     await ensureLocalMarketEntry(page);
     await page.goto("/ledger");
+    await waitForHydration(page);
     await page.getByRole("link", { name: "Local market", exact: true }).click();
     await expect(page).toHaveURL(/\/ledger\/[^/]+$/);
     await expect(page.getByRole("link", { name: "Ledger", exact: true })).toHaveAttribute("aria-current", "page");
@@ -139,6 +144,7 @@ test("supports skip navigation and current-section semantics", async ({ browser,
 
     const settlementId = await createSettlement(page, baseURL!);
     await page.goto(`/settlements/${settlementId}`);
+    await waitForHydration(page);
     await expect(page).toHaveURL(new RegExp(`/settlements/${settlementId}$`));
     await expect(page.getByRole("link", { name: "Settle up", exact: true })).toHaveAttribute("aria-current", "page");
     expect(await page.locator('[aria-current="page"]').count()).toBe(1);
@@ -227,6 +233,7 @@ test("opens quick navigation by pointer and exact keyboard shortcut", async ({ b
     }
 
     await page.goto("/settings/ynab");
+    await waitForHydration(page);
     const planId = page.getByLabel("Plan ID");
     await planId.fill("unchanged-plan-id");
     await planId.focus();
