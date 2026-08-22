@@ -6,9 +6,9 @@ description: Finish delegated project work from the parent Herdr workspace after
 # Finish delegated worktree work
 
 Run this skill from the **parent workspace repository root**. Never run it from
-the linked worktree. The parent workspace agent does not monitor or wait on the
-child workspace agent. The child must independently report completion to the
-parent first.
+the linked worktree. By default, the parent workspace agent does not monitor or
+wait on the child workspace agent. The child must independently report
+completion to the parent first.
 
 ## Parent-pane prerequisite
 
@@ -41,8 +41,10 @@ Require all of these before proposing a merge:
 - the parent checkout has no unrelated uncommitted changes.
 
 Do not infer completion from a pane being idle, from Herdr status, or from a
-clean branch without the child's report. Do not call `herdr agent wait`, poll
-child panes, or inspect child-agent lifecycle state.
+clean branch without the child's final handoff. By default, do not call
+`herdr agent wait`, poll child panes, or inspect child-agent lifecycle state. If
+the user explicitly requests monitoring or waiting, one bounded background wait
+is permitted, but it does not replace the required final handoff.
 
 ## Approval-gated finish sequence
 

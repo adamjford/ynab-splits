@@ -5,9 +5,9 @@ description: Start delegated project work in a new Herdr Git worktree from the p
 
 # Start delegated worktree work
 
-Run this skill from the **parent workspace repository root**. Never run it from a
-linked worktree. The parent workspace agent starts the child and then returns;
-it does not monitor the child or wait for its task to finish.
+Run this skill from the **parent workspace repository root**. Never run it from
+the linked worktree. By default, the parent workspace agent starts the child
+workspace agent and then returns without monitoring or waiting for completion.
 
 ## Parent-pane prerequisite
 
@@ -66,15 +66,23 @@ workspace ID or interpret this failure as a Git branch problem.
    delegated work to complete. It renames the single plugin-created agent to
    `omp-<worktree_name>`; if there are multiple configured agents, choose the
    task agent and rename it with Herdr before prompting.
-6. Prompt the child using Herdr, without a completion wait:
+6. Prompt the child workspace agent using Herdr without a completion wait:
 
    ```bash
    herdr agent prompt omp-<worktree_name> '<complete child prompt>'
    ```
 
-   Do not add `--wait`; do not run `herdr agent wait`; do not poll pane output.
-   Use `herdr agent get` only when the initial prompt itself is rejected or
-   blocked, then stop and surface the block instead of answering it silently.
+   Do not add `--wait` to the prompt command. By default, do not run
+   `herdr agent wait` or poll pane output. If the user explicitly requests
+   monitoring or waiting, launch exactly one bounded background wait, such as:
+
+   ```bash
+   herdr agent wait omp-<worktree_name> --until done --timeout 1800000
+   ```
+
+   Keep that wait out of the parent pane so the parent remains responsive. A
+   timeout or idle pane is not completion; require the child workspace agent's
+   final handoff before acting.
 7. Tell the child workspace agent to work entirely in its linked checkout and
    commit coherent logical increments as it works; do not let unrelated steps
    accumulate in an uncommitted tree. Before the final handoff, it must commit

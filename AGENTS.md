@@ -62,6 +62,12 @@ the operational database.
 - MUST use `.omp/skills/herdr-finish-worktree/SKILL.md` to finish delegated
   work. Run it from the parent repository root only after the child reports
   completion and the user explicitly approves the proposed merge.
+- By default, the parent workspace agent starts the child workspace agent and
+  returns without monitoring it. If the user explicitly requests monitoring or
+  waiting, the parent MAY launch one bounded background Herdr wait, for example
+  `herdr agent wait omp-<worktree_name> --until done --timeout 1800000` for
+  thirty minutes, while remaining responsive to new prompts. A timeout is not
+  completion; require the child's final handoff before acting.
 - The child workspace agent MUST commit coherent logical increments as it works;
   do not accumulate an uncommitted tree across unrelated steps.
 - Before reporting completion, the child workspace agent MUST commit all
