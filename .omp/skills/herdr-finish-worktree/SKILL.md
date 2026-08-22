@@ -42,12 +42,14 @@ Require all of these before proposing a merge:
 
 Do not infer completion from a pane being idle, from Herdr status, or from a
 clean branch without the child's final handoff. By default, do not call
-`herdr agent wait`, poll child panes, or inspect child-agent lifecycle state. If
-the user explicitly requests monitoring or waiting, one bounded background wait
-is permitted, but it does not replace the required final handoff.
+`herdr agent wait`, poll child panes, or inspect child-agent lifecycle state.
+Only after the user explicitly requests monitoring or waiting may one observable
+bounded background wait run. Cancel or replace any existing watcher for the
+same target before starting another; never run duplicate watchers. If it times
+out, report the timeout and do not relaunch automatically. A wait does not
+replace the required final handoff.
 
 ## Approval-gated finish sequence
-
 1. Capture the child's report in the current conversation. If it is missing,
    stop and ask the child/user to provide it; never infer completion from pane
    state. A previously authorized bounded background wait may continue, but it

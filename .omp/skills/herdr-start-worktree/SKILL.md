@@ -73,16 +73,20 @@ workspace ID or interpret this failure as a Git branch problem.
    ```
 
    Do not add `--wait` to the prompt command. By default, do not run
-   `herdr agent wait` or poll pane output. If the user explicitly requests
-   monitoring or waiting, launch exactly one bounded background wait, such as:
+   `herdr agent wait` or poll pane output. Only after the user explicitly
+   requests monitoring or waiting may the parent launch exactly one observable
+   bounded background wait, such as:
 
    ```bash
    herdr agent wait omp-<worktree_name> --until done --timeout 1800000
    ```
 
-   Keep that wait out of the parent pane so the parent remains responsive. A
-   timeout or idle pane is not completion; require the child workspace agent's
-   final handoff before acting.
+   Use the user's timeout; thirty minutes is the current example. Cancel or
+   replace any existing wait for the same target before starting another, and
+   never run duplicate watchers. Keep the wait out of the parent pane so the
+   parent remains responsive. If it times out, report the timeout and do not
+   relaunch automatically. A timeout or idle pane is not completion; require
+   the child workspace agent's final handoff before acting.
 7. Tell the child workspace agent to work entirely in its linked checkout and
    commit coherent logical increments as it works; do not let unrelated steps
    accumulate in an uncommitted tree. Before the final handoff, it must commit

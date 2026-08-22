@@ -63,11 +63,15 @@ the operational database.
   work. Run it from the parent repository root only after the child reports
   completion and the user explicitly approves the proposed merge.
 - By default, the parent workspace agent starts the child workspace agent and
-  returns without monitoring it. If the user explicitly requests monitoring or
-  waiting, the parent MAY launch one bounded background Herdr wait, for example
+  returns without monitoring it. Only after the user explicitly requests
+  monitoring may the parent launch exactly one observable background Herdr wait
+  with a user-selected timeout, for example
   `herdr agent wait omp-<worktree_name> --until done --timeout 1800000` for
-  thirty minutes, while remaining responsive to new prompts. A timeout is not
-  completion; require the child's final handoff before acting.
+  thirty minutes, while remaining responsive to new prompts. Cancel or replace
+  any existing watcher for that target before starting another; never run
+  duplicate watchers. If the wait times out, report the timeout and do not
+  infer completion or relaunch automatically. A timeout is not completion;
+  require the child's final handoff before acting.
 - The child workspace agent MUST commit coherent logical increments as it works;
   do not accumulate an uncommitted tree across unrelated steps.
 - Before reporting completion, the child workspace agent MUST commit all
