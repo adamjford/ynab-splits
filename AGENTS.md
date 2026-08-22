@@ -53,6 +53,24 @@ the operational database.
 - External writes, destructive commands, deployments, merges, pushes, real YNAB
   mutations, secret access, and operational database access require explicit approval.
 
+## Herdr delegated worktrees
+
+- MUST use `.omp/skills/herdr-start-worktree/SKILL.md` to start delegated
+  project work. Run it from the parent repository root with the parent
+  `HERDR_WORKSPACE_ID`; do not create delegated worktrees manually or from a
+  child worktree.
+- MUST use `.omp/skills/herdr-finish-worktree/SKILL.md` to finish delegated
+  work. Run it from the parent repository root only after the child reports
+  completion and the user explicitly approves the proposed merge.
+- The parent workspace agent MUST NOT monitor or wait on child agents. The
+  child reports its branch, commits, checks, risks, and clean-worktree state to
+  the parent before finishing.
+- Child completion MUST be reported in the child's final response or handoff,
+  not through Herdr/desktop notifications that can interrupt active parent
+  work. The parent handles that report only after its active work completes.
+- Preserve the workspace-manager plugin's configured layout. Use Herdr
+  lifecycle commands and never rely on UI focus to select the parent workspace.
+
 ## GPT-5.6 model use
 
 Use the explicit model-role mappings in the active OMP profile. Use medium effort
