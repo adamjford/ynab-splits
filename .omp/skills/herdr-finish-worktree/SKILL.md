@@ -49,7 +49,9 @@ is permitted, but it does not replace the required final handoff.
 ## Approval-gated finish sequence
 
 1. Capture the child's report in the current conversation. If it is missing,
-   stop and ask the child/user to provide it; do not monitor the child.
+   stop and ask the child/user to provide it; never infer completion from pane
+   state. A previously authorized bounded background wait may continue, but it
+   does not replace the required report.
 2. Run the project-local helper **without** `--approve`:
 
    ```bash
