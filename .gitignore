@@ -4,6 +4,9 @@
 !.env.production.example
 /node_modules/
 
+# Development instance state (database files, metadata, and secrets).
+/.local/
+
 # React Router
 /.react-router/
 /build/

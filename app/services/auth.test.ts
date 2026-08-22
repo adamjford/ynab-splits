@@ -13,10 +13,14 @@ const env: AppEnv = {
   TOKEN_ENCRYPTION_KEY: "test-token-encryption-key-123456",
   YNAB_CLIENT_ID: "test-client-id",
   YNAB_CLIENT_SECRET: "test-client-secret",
+  YNAB_API_ORIGIN: "https://api.ynab.com/v1",
+  YNAB_OAUTH_ORIGIN: "https://app.ynab.com",
   HOST: "127.0.0.1",
   PORT: 3000,
+  INSTANCE_ID: "default",
+  INSTANCE_LABEL: "",
+  COOKIE_PREFIX: "ynab_splits",
 };
-
 const user: YnabUser = { id: "ynab-user-1" };
 
 function tokenResponse(
@@ -46,10 +50,25 @@ describe("YNAB OAuth service", () => {
       code_challenge_method: "S256",
     });
   });
+  it("uses an injected OAuth origin for authorization and token exchange", async () => {
+    const oauthEnv = { ...env, YNAB_OAUTH_ORIGIN: "http://fake-ynab.test:4401" };
+    const authorization = new URL(buildAuthorizationUrl(oauthEnv, "state-1", "verifier-1"));
+    expect(authorization.origin + authorization.pathname).toBe("http://fake-ynab.test:4401/oauth/authorize");
+
+    let tokenUrl = "";
+    const fetchImpl: typeof fetch = async (url) => {
+      tokenUrl = String(url);
+      return tokenResponse();
+    };
+    await exchangeCode(oauthEnv, "code-1", "verifier-1", fetchImpl);
+    expect(tokenUrl).toBe("http://fake-ynab.test:4401/oauth/token");
+  });
 
   it("exchanges an authorization code using the configured client and verifier", async () => {
     const requests: RequestInit[] = [];
-    const fetchImpl: typeof fetch = async (_url, init) => {
+    let requestUrl = "";
+    const fetchImpl: typeof fetch = async (url, init) => {
+      requestUrl = String(url);
       requests.push(init ?? {});
       return tokenResponse({ access_token: " access-token ", refresh_token: " refresh-token " });
     };
@@ -60,6 +79,7 @@ describe("YNAB OAuth service", () => {
       expires_in: 3600,
     });
     expect(requests).toHaveLength(1);
+    expect(requestUrl).toBe("https://app.ynab.com/oauth/token");
     expect(requests[0].method).toBe("POST");
     expect(requests[0].headers).toEqual({ "Content-Type": "application/x-www-form-urlencoded" });
     expect([...new URLSearchParams(requests[0].body as string)]).toEqual([

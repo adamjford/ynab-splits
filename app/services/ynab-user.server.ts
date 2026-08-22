@@ -72,5 +72,7 @@ function createGateway(
     async () => {
       db.prepare("update oauth_connections set disconnected_at = CURRENT_TIMESTAMP where user_id = ?").run(userId);
     },
+    env.YNAB_API_ORIGIN,
+    env.YNAB_OAUTH_ORIGIN,
   );
 }

@@ -1,15 +1,24 @@
 import { expect, test, type BrowserContext } from "@playwright/test";
-import { FAKE_ORIGIN } from "./fake-ynab-server";
+import { FAKE_PORT } from "./fake-ynab-server";
 import { configurePlan, installFakeOAuth, newContext, resetFakeYnab, signIn, waitForHydration } from "./test-helpers";
 
-test.describe.configure({ mode: "serial" });
+const instanceId = process.env.INSTANCE_ID ?? "e2e";
+const instanceLabel = process.env.INSTANCE_LABEL ?? "e2e";
+const cookiePrefix = process.env.COOKIE_PREFIX ?? `ynab_splits_${instanceId}`;
+const authCookieName = `${cookiePrefix}_auth`;
+const fakeOrigin = process.env.E2E_FAKE_YNAB_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_FAKE_PORT ?? FAKE_PORT}`;
 
+test.describe.configure({ mode: "serial" });
 test("onboards both identities with isolated cookies and an invite", async ({ browser, baseURL }) => {
   const adam = await newContext(browser);
   const adamPage = await adam.newPage();
   await resetFakeYnab(adamPage);
   await signIn(adamPage, "adam", "Adam", baseURL!);
   await expect(adamPage.getByText("Adam").first()).toBeVisible();
+  await expect(adamPage.getByLabel(`Active development instance: ${instanceLabel}`)).toBeVisible();
+  const diagnostics = await adamPage.request.get(`${baseURL}/__dev/health`);
+  expect(diagnostics.ok()).toBeTruthy();
+  await expect(diagnostics.json()).resolves.toEqual({ ok: true, instanceId, origin: baseURL });
   await adamPage.getByRole("button", { name: "Create one-use invite" }).click();
   const inviteText = await adamPage.getByText(/Invite URL:/).textContent();
   const inviteUrl = new URL(inviteText!.replace(/^.*Invite URL:\s*/, ""), baseURL);
@@ -19,12 +28,12 @@ test("onboards both identities with isolated cookies and an invite", async ({ br
   const chelseaPage = await chelsea.newPage();
   await signIn(chelseaPage, "chelsea", "Chelsea", baseURL!, invitePath);
   await expect(chelseaPage.context().cookies()).resolves.toEqual(
-    expect.arrayContaining([expect.objectContaining({ name: "ynab_splits_auth" })]),
+    expect.arrayContaining([expect.objectContaining({ name: authCookieName })]),
   );
   const adamCookies = await adam.cookies();
   const chelseaCookies = await chelsea.cookies();
-  expect(adamCookies.find((cookie) => cookie.name === "ynab_splits_auth")?.value).not.toBe(
-    chelseaCookies.find((cookie) => cookie.name === "ynab_splits_auth")?.value,
+  expect(adamCookies.find((cookie) => cookie.name === authCookieName)?.value).not.toBe(
+    chelseaCookies.find((cookie) => cookie.name === authCookieName)?.value,
   );
   await expect(chelseaPage.getByRole("link", { name: "YNAB settings" })).toBeVisible();
 
@@ -77,7 +86,7 @@ test("keeps owner-private ledger controls out of the other member's detail view"
     await configurePlan(adamPage, "adam");
 
     const sourceUpdate = await adamPage.request.put(
-      `${FAKE_ORIGIN}/v1/plans/fake-plan-adam/transactions/fake-transaction-adam-1`,
+      `${fakeOrigin}/v1/plans/fake-plan-adam/transactions/fake-transaction-adam-1`,
       {
         headers: { Authorization: "Bearer fake-access-adam" },
         data: {
@@ -225,9 +234,9 @@ test("supports logout and responsive navigation without retaining the session", 
 });
 
 test("fake service controls expose deterministic transport outcomes", async ({ request }) => {
-  const control = await request.post(`${FAKE_ORIGIN}/__control`, { data: { mode: "rate_limit", path: "/v1/user" } });
+  const control = await request.post(`${fakeOrigin}/__control`, { data: { mode: "rate_limit", path: "/v1/user" } });
   expect(control.ok()).toBeTruthy();
-  await expect((await request.get(`${FAKE_ORIGIN}/__health`)).json()).resolves.toEqual({ ok: true });
-  const reset = await request.post(`${FAKE_ORIGIN}/__control`, { data: { mode: "success" } });
+  await expect((await request.get(`${fakeOrigin}/__health`)).json()).resolves.toEqual({ ok: true });
+  const reset = await request.post(`${fakeOrigin}/__control`, { data: { mode: "success" } });
   expect(reset.ok()).toBeTruthy();
 });

@@ -19,6 +19,22 @@ are in [../../SPEC.md](../../SPEC.md). Domain value rules are in
 - Persistent databases use SQLite WAL behavior. Tests and smoke checks use a
   fresh temporary or in-memory database, never the operational database.
 
+## Development instance ownership
+- Runtime ownership is stored in the `runtime_metadata` table under the
+  `database_owner` key, not in household, membership, ledger, or other
+  product tables. The v4 owner metadata migration is applied after legacy
+  v1/v2/v3 databases are baselined, so each legacy schema reaches the current
+  version before ownership is checked.
+- `createDatabase(filename, ownerId?)` accepts an optional runtime owner ID.
+  Instance-aware request access supplies `env.INSTANCE_ID`; direct callers that
+  omit the owner remain compatible.
+- The first owner-aware open records the owner ID. A later open with a
+  different owner fails closed before normal reads or writes; reopening with the
+  same owner succeeds. An owner mismatch must not migrate, overwrite, or
+  expose product state.
+- Instance IDs are runtime/fixture identity only. They never become product
+  records or agent/worktree columns.
+
 ## Household ownership and stored identities
 
 - A user has one stable YNAB identity and one chosen display name. A household
@@ -76,12 +92,17 @@ are in [../../SPEC.md](../../SPEC.md). Domain value rules are in
    skipped according to their idempotency boundary.
 5. Remote-work records expose recoverable status and read-back evidence without
    exposing credentials.
+6. An owner-aware reopen succeeds for the same ID and fails before product
+   reads/writes for a different ID; omitting the owner remains supported.
+7. Legacy v1/v2/v3 databases baseline before the owner metadata migration, and
+   runtime owner metadata remains outside product-domain tables.
 
 ## Implementation and test map
 
 | Contract section | Implementation | Focused evidence |
 | --- | --- | --- |
 | Database creation, migrations, integrity, and foreign keys | `app/db/database.server.ts` | `app/db/database.test.ts`, `app/db/migration-behavior.test.ts` |
+| Runtime instance ownership and metadata migration | `app/db/database.server.ts`, `app/services/request.server.ts`, `app/services/env.server.ts` | `app/db/database.test.ts`, `app/db/migration-behavior.test.ts`, `app/services/request.server.test.ts` |
 | Atomic ledger parent/share persistence | `app/db/ledger-repository.server.ts` | `app/db/ledger-repository.test.ts` |
 | Decision, manual-task, settlement-item, and posting uniqueness | `app/db/database.server.ts`, `app/db/migration-behavior.test.ts` | `app/db/database.test.ts`, `app/db/migration-behavior.test.ts` |
 | Household and owner-scoped persistence | `app/db/database.server.ts`, `app/services/request.server.ts` | `app/db/database.test.ts`, `app/services/request.server.test.ts`, `e2e/app.spec.ts` |

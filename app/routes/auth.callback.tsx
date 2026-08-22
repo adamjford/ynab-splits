@@ -29,6 +29,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     Date.now() + token.expires_in * 1000,
     env.YNAB_CLIENT_ID,
     env.YNAB_CLIENT_SECRET,
+    fetch,
+    undefined,
+    undefined,
+    env.YNAB_API_ORIGIN,
+    env.YNAB_OAUTH_ORIGIN,
   );
   const ynabUser = await gateway.getUser();
   const db = database();

@@ -59,14 +59,12 @@ deployment, backup, credentials, and operational safety remain in
    settlement void and restore actions preserve audit history and require the
    documented confirmation or eligibility conditions.
 
-## Runtime and verification boundary
-
 - Loaders, actions, authentication, encrypted connection data, external YNAB
   calls, and SQLite access remain server-side in the SSR Node application.
-  Browser code does not hold OAuth tokens or provide a compatibility path for
+- Browser code does not hold OAuth tokens or provide a compatibility path for
   the removed prototype surface.
 - Application and migration processes receive an explicit `DATABASE_PATH`.
-  The importer requires a development or production environment name and
+- The importer requires a development or production environment name and
   resolves the selected path from its matching environment file or an
   explicitly injected fallback.
 - Development and production paths are separate; the application does not infer
@@ -82,6 +80,26 @@ deployment, backup, credentials, and operational safety remain in
 - A behavior change is complete only when its specification, focused tests, and
   implementation agree. Run the focused boundary first, then the applicable
   repository checks and actual-surface smoke or end-to-end path.
+
+### Development instance isolation
+
+- Each development process has a validated instance ID/slug. Its HTTP
+  origin/port, SQLite path, signing and encryption secrets, auth/OAuth cookie
+  namespace, and fake OAuth/YNAB endpoint are instance-scoped, so distinct
+  instances can run concurrently without sharing runtime state.
+- Startup fails closed for an invalid ID, an origin/port collision, or a
+  database whose recorded owner ID differs from the requested instance. A
+  database owned by one instance is never silently reused, migrated, or
+  overwritten by another.
+- Instance identity is runtime and fixture metadata only; it does not enter
+  household, membership, ledger, or other product-domain state. The
+  development launcher and fixtures use disposable state, and fake-service
+  state is isolated per run. OAuth/API origin overrides are test-only.
+- Production remains unchanged: it requires an explicit `DATABASE_PATH` and
+  uses real YNAB OAuth/API origins by default. Development instance defaults
+  never select production data or endpoints.
+- Same-host auth and OAuth cookies are namespaced by instance. Development
+  runs never expose secrets or perform real YNAB writes.
 
 ## Operational handoff contract
 
@@ -174,6 +192,19 @@ and unconfigured coverage targets are not application requirements.
    reviewable outcome; no success is inferred without matching read-back.
 5. The same behavior is represented by a focused test and the implementation
    path listed below.
+6. Two validated development instances with different IDs can run concurrently
+   on distinct origins/ports, and each uses only its own path, secrets, and
+   fake-service endpoint.
+7. Same-host auth and OAuth cookies from one instance are not accepted by
+   another instance.
+8. An instance cannot open a database owned by a different instance ID, and an
+   origin/port collision is rejected before product data is read or written.
+9. Each E2E run has isolated fake OAuth/API state and configurable ports; one
+   run cannot observe another run's fake-service state.
+10. Development harnesses expose no secrets and perform no real YNAB writes;
+    production still requires explicit database selection and real origins.
+11. Instance IDs and runtime metadata never enter household, membership, ledger,
+    or other product-domain state; no agent/worktree concept is persisted.
 
 ## Implementation and test map
 
@@ -186,6 +217,7 @@ and unconfigured coverage targets are not application requirements.
 | Settlement eligibility and lifecycle | `app/routes/settlement-new.tsx`, `app/routes/settlement-detail.tsx`, `app/domain/settlement.ts` | `app/domain/settlement.test.ts`, `e2e/settlement-interactions.spec.ts` |
 | SQLite lifecycle and atomic persistence | `app/db/database.server.ts`, `app/db/ledger-repository.server.ts` | `app/db/database.test.ts`, `app/db/migration-behavior.test.ts`, `app/db/ledger-repository.test.ts` |
 | Route shell, navigation, and feedback | `app/routes.ts`, `app/routes/app-layout.tsx`, `app/navigation.ts`, `app/components/QuickNavigation.tsx`, `app/components/ActionFeedback.tsx` | `app/navigation.test.ts`, `e2e/navigation.spec.ts`, `e2e/action-feedback.spec.ts` |
+| Development runtime instance isolation | `scripts/dev-instance.ts`, `scripts/dev-seed.ts`, `scripts/dev-reset.ts`, `app/services/env.server.ts`, `app/services/session.server.ts`, `app/services/auth.server.ts`, `app/services/ynab.server.ts`, `app/db/database.server.ts`, `app/routes/dev-health.tsx`, `app/routes/app-layout.tsx` | `app/services/env.test.ts`, `app/db/database.test.ts`, `e2e/test-server.ts`, `e2e/fake-ynab-server.ts`, `e2e/fake-fetch.mjs`, `playwright.config.ts` |
 
 The implementation and tests above are the current evidence for this
 specification; README remains authoritative for non-behavioral operations.

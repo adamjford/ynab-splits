@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 
 /** The schema is deliberately advanced only by the ordered migrations below. */
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 type Migration = { version: number; up: (db: Database.Database) => void };
 
@@ -413,7 +413,41 @@ const migrations: Migration[] = [
       validateLedgerInvariants(db);
     },
   },
+  {
+    version: 4,
+    up: (db) => db.exec(`
+      CREATE TABLE runtime_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `),
+  },
 ];
+
+const OWNER_METADATA_KEY = "database_owner";
+const OWNER_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,62}[A-Za-z0-9])?$/;
+
+function ensureDatabaseOwner(db: Database.Database, ownerId: string): void {
+  if (typeof ownerId !== "string" || !OWNER_ID_PATTERN.test(ownerId)) throw new Error("SQLite database owner is malformed");
+
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const rows = db.prepare("SELECT value FROM runtime_metadata WHERE key = ?").all(OWNER_METADATA_KEY) as Array<{ value: unknown }>;
+    if (rows.length > 1) throw new Error("SQLite database owner metadata is malformed");
+    const currentOwner = rows[0]?.value;
+    if (currentOwner === undefined) {
+      db.prepare("INSERT INTO runtime_metadata (key, value) VALUES (?, ?)").run(OWNER_METADATA_KEY, ownerId);
+    } else if (typeof currentOwner !== "string" || !OWNER_ID_PATTERN.test(currentOwner)) {
+      throw new Error("SQLite database owner metadata is malformed");
+    } else if (currentOwner !== ownerId) {
+      throw new Error("SQLite database owner mismatch");
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    rollback(db);
+    throw error;
+  }
+}
 
 function rollback(db: Database.Database): void {
   try {
@@ -468,7 +502,7 @@ export function withLedgerTransaction<T>(db: AppDatabase, operation: () => T): T
   }
 }
 
-export function createDatabase(filename: string): AppDatabase {
+export function createDatabase(filename: string, ownerId?: string): AppDatabase {
   const db = new Database(filename);
   try {
     db.pragma("foreign_keys = ON");
@@ -519,6 +553,7 @@ export function createDatabase(filename: string): AppDatabase {
       }
     }
     if (version !== CURRENT_SCHEMA_VERSION) throw new Error("SQLite schema did not reach the current version");
+    if (ownerId !== undefined) ensureDatabaseOwner(db, ownerId);
     validateDatabase(db);
     return db;
   } catch (error) {

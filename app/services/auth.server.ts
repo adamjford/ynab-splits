@@ -6,7 +6,6 @@ import type { AppEnv } from "./env.server";
 import type { YnabUser } from "./ynab.server";
 import { YnabTransportError } from "./ynab.server";
 
-const TOKEN_URL = "https://app.ynab.com/oauth/token";
 const OAUTH_TIMEOUT_MS = 15_000;
 const oauthTokenSchema = z.object({
   access_token: z.string().trim().min(1),
@@ -22,7 +21,7 @@ export interface OAuthTokenResponse {
 
 export function buildAuthorizationUrl(env: AppEnv, state: string, verifier: string): string {
   const challenge = createHash("sha256").update(verifier).digest("base64url");
-  const url = new URL("https://app.ynab.com/oauth/authorize");
+  const url = new URL("/oauth/authorize", env.YNAB_OAUTH_ORIGIN);
   url.search = new URLSearchParams({
     client_id: env.YNAB_CLIENT_ID,
     response_type: "code",
@@ -44,7 +43,7 @@ export async function exchangeCode(
   const timer = setTimeout(() => controller.abort(), OAUTH_TIMEOUT_MS);
   let response: Response;
   try {
-    response = await fetchImpl(TOKEN_URL, {
+    response = await fetchImpl(new URL("/oauth/token", env.YNAB_OAUTH_ORIGIN), {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({

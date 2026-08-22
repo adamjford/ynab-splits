@@ -6,6 +6,7 @@ export default [
   route("logout", "routes/logout.tsx"),
   route("invite/:token", "routes/invite.tsx"),
   route("onboarding", "routes/onboarding.tsx"),
+  route("__dev/health", "routes/dev-health.tsx"),
   route("", "routes/app-layout.tsx", [
     index("routes/dashboard.tsx"),
     route("inbox", "routes/inbox.tsx"),
