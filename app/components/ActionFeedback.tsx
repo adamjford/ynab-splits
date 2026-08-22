@@ -17,8 +17,23 @@ export function ActionFeedback({ error, status, focusKey }: ActionFeedbackProps)
 
   if (error == null && status == null) return null;
 
-  return <>
-    {error != null && <p ref={errorRef} role="alert" tabIndex={-1} className="text-red-700 dark:text-red-400">{error}</p>}
-    {status != null && <p ref={statusRef} role="status" tabIndex={error != null ? undefined : -1} className="text-green-700 dark:text-green-400">{status}</p>}
-  </>;
+  return (
+    <>
+      {error != null && (
+        <p ref={errorRef} role="alert" tabIndex={-1} className="text-red-700 dark:text-red-400">
+          {error}
+        </p>
+      )}
+      {status != null && (
+        <p
+          ref={statusRef}
+          role="status"
+          tabIndex={error != null ? undefined : -1}
+          className="text-green-700 dark:text-green-400"
+        >
+          {status}
+        </p>
+      )}
+    </>
+  );
 }

@@ -152,46 +152,141 @@ END;
 
 const INITIAL_COLUMNS: Record<string, string[]> = {
   users: ["id", "ynab_user_id", "display_name", "created_at"],
-  oauth_connections: ["id", "user_id", "encrypted_access_token", "encrypted_refresh_token", "access_expires_at", "disconnected_at", "created_at", "updated_at"],
+  oauth_connections: [
+    "id",
+    "user_id",
+    "encrypted_access_token",
+    "encrypted_refresh_token",
+    "access_expires_at",
+    "disconnected_at",
+    "created_at",
+    "updated_at",
+  ],
   households: ["id", "name", "created_at"],
   memberships: ["household_id", "user_id", "member_key"],
   invites: ["id", "household_id", "token_hash", "expires_at", "consumed_at", "invited_member_key"],
-  plan_settings: ["user_id", "plan_id", "currency_iso_code", "currency_decimal_digits", "settlement_account_id", "splitting_category_id", "settlement_mode", "updated_at"],
+  plan_settings: [
+    "user_id",
+    "plan_id",
+    "currency_iso_code",
+    "currency_decimal_digits",
+    "settlement_account_id",
+    "splitting_category_id",
+    "settlement_mode",
+    "updated_at",
+  ],
   source_accounts: ["user_id", "account_id"],
-  ledger_entries: ["id", "household_id", "kind", "amount_minor", "cash_member_key", "entry_date", "description", "category_id", "source_plan_id", "source_transaction_id", "source_snapshot_hash", "legacy_key", "voided_at", "correction_of_id", "created_at"],
+  ledger_entries: [
+    "id",
+    "household_id",
+    "kind",
+    "amount_minor",
+    "cash_member_key",
+    "entry_date",
+    "description",
+    "category_id",
+    "source_plan_id",
+    "source_transaction_id",
+    "source_snapshot_hash",
+    "legacy_key",
+    "voided_at",
+    "correction_of_id",
+    "created_at",
+  ],
   ledger_shares: ["entry_id", "member_key", "amount_minor"],
   category_assignments: ["user_id", "category_id", "category_name"],
-  ynab_transaction_decisions: ["id", "user_id", "plan_id", "ynab_transaction_id", "decision", "ledger_entry_id", "source_snapshot_hash", "created_at"],
-  manual_ynab_tasks: ["id", "decision_id", "status", "intended_target_json", "remote_readback_json", "last_error", "created_at", "updated_at"],
-  settlements: ["id", "household_id", "start_date", "end_date", "debtor_member_key", "creditor_member_key", "amount_minor", "status", "acknowledged_payment_at", "created_at"],
+  ynab_transaction_decisions: [
+    "id",
+    "user_id",
+    "plan_id",
+    "ynab_transaction_id",
+    "decision",
+    "ledger_entry_id",
+    "source_snapshot_hash",
+    "created_at",
+  ],
+  manual_ynab_tasks: [
+    "id",
+    "decision_id",
+    "status",
+    "intended_target_json",
+    "remote_readback_json",
+    "last_error",
+    "created_at",
+    "updated_at",
+  ],
+  settlements: [
+    "id",
+    "household_id",
+    "start_date",
+    "end_date",
+    "debtor_member_key",
+    "creditor_member_key",
+    "amount_minor",
+    "status",
+    "acknowledged_payment_at",
+    "created_at",
+  ],
   settlement_items: ["settlement_id", "ledger_entry_id"],
-  ynab_postings: ["id", "settlement_id", "decision_id", "user_id", "posting_kind", "status", "import_id", "intended_target_json", "remote_transaction_id", "remote_readback_json", "last_error", "created_at", "updated_at"],
+  ynab_postings: [
+    "id",
+    "settlement_id",
+    "decision_id",
+    "user_id",
+    "posting_kind",
+    "status",
+    "import_id",
+    "intended_target_json",
+    "remote_transaction_id",
+    "remote_readback_json",
+    "last_error",
+    "created_at",
+    "updated_at",
+  ],
 };
 
 const TABLE_NAMES = Object.keys(INITIAL_COLUMNS);
 
 function assertLegacyShape(db: Database.Database, withSnapshot: boolean): void {
-  const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all() as Array<{ name: string }>).map((row) => row.name);
+  const tables = (
+    db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+      .all() as Array<{ name: string }>
+  ).map((row) => row.name);
   const expectedTables = [...TABLE_NAMES].sort();
-  if (JSON.stringify(tables) !== JSON.stringify(expectedTables)) throw new Error("cannot baseline unknown or partial SQLite schema");
+  if (JSON.stringify(tables) !== JSON.stringify(expectedTables))
+    throw new Error("cannot baseline unknown or partial SQLite schema");
   for (const table of TABLE_NAMES) {
     const expected = [...INITIAL_COLUMNS[table]];
     const columns = (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((row) => row.name);
     if (table === "ynab_transaction_decisions" && withSnapshot) expected.push("source_snapshot_json");
-    if (JSON.stringify(columns) !== JSON.stringify(expected)) throw new Error(`cannot baseline unfamiliar columns in ${table}`);
+    if (JSON.stringify(columns) !== JSON.stringify(expected))
+      throw new Error(`cannot baseline unfamiliar columns in ${table}`);
   }
-  const indexes = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name").all() as Array<{ name: string }>).map((row) => row.name);
-  if (JSON.stringify(indexes) !== JSON.stringify(["one_action_needed_manual_task"])) throw new Error("cannot baseline unfamiliar SQLite indexes");
-  const triggers = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' ORDER BY name").all() as Array<{ name: string }>).map((row) => row.name);
-  if (JSON.stringify(triggers) !== JSON.stringify(["ledger_share_total_check"])) throw new Error("cannot baseline unfamiliar SQLite triggers");
+  const indexes = (
+    db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name").all() as Array<{
+      name: string;
+    }>
+  ).map((row) => row.name);
+  if (JSON.stringify(indexes) !== JSON.stringify(["one_action_needed_manual_task"]))
+    throw new Error("cannot baseline unfamiliar SQLite indexes");
+  const triggers = (
+    db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' ORDER BY name").all() as Array<{ name: string }>
+  ).map((row) => row.name);
+  if (JSON.stringify(triggers) !== JSON.stringify(["ledger_share_total_check"]))
+    throw new Error("cannot baseline unfamiliar SQLite triggers");
 }
 export function validateLedgerInvariants(db: Database.Database): void {
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT e.id, e.amount_minor, e.cash_member_key, s.member_key, s.amount_minor AS share_minor
     FROM ledger_entries e
     LEFT JOIN ledger_shares s ON s.entry_id = e.id
     ORDER BY e.id, s.member_key
-  `).all() as Array<{
+  `,
+    )
+    .all() as Array<{
     id: string;
     amount_minor: number;
     cash_member_key: string;
@@ -214,8 +309,7 @@ export function validateLedgerInvariants(db: Database.Database): void {
       item.amount > 0 &&
       item.shares.every((share) => Number.isSafeInteger(share.amount) && share.amount >= 0);
     const sharesMatchAmount =
-      safeAmounts &&
-      BigInt(item.shares[0]?.amount ?? 0) + BigInt(item.shares[1]?.amount ?? 0) === BigInt(item.amount);
+      safeAmounts && BigInt(item.shares[0]?.amount ?? 0) + BigInt(item.shares[1]?.amount ?? 0) === BigInt(item.amount);
     if (
       members.length !== 2 ||
       members[0] !== "adam" ||
@@ -224,7 +318,9 @@ export function validateLedgerInvariants(db: Database.Database): void {
       !safeAmounts ||
       !sharesMatchAmount
     ) {
-      throw new Error(`ledger corruption: entry ${id} must have exactly one Adam and one Chelsea share summing to its amount`);
+      throw new Error(
+        `ledger corruption: entry ${id} must have exactly one Adam and one Chelsea share summing to its amount`,
+      );
     }
   }
 }
@@ -320,7 +416,11 @@ const migrations: Migration[] = [
 ];
 
 function rollback(db: Database.Database): void {
-  try { db.exec("ROLLBACK"); } catch { /* transaction may not have started */ }
+  try {
+    db.exec("ROLLBACK");
+  } catch {
+    /* transaction may not have started */
+  }
 }
 
 function applyMigration(db: Database.Database, migration: Migration): void {
@@ -328,7 +428,9 @@ function applyMigration(db: Database.Database, migration: Migration): void {
   try {
     migration.up(db);
     validateDatabase(db);
-    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, CURRENT_TIMESTAMP)").run(migration.version);
+    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, CURRENT_TIMESTAMP)").run(
+      migration.version,
+    );
     db.exec("COMMIT");
   } catch (error) {
     rollback(db);
@@ -346,7 +448,8 @@ function readMigrationVersion(db: Database.Database): number {
     if (rows[i].version !== i + 1) throw new Error("SQLite schema migration history is gapped or invalid");
   }
   const version = rows.at(-1)?.version ?? 0;
-  if (version > CURRENT_SCHEMA_VERSION) throw new Error(`SQLite schema version ${version} is newer than this application`);
+  if (version > CURRENT_SCHEMA_VERSION)
+    throw new Error(`SQLite schema version ${version} is newer than this application`);
   return version;
 }
 
@@ -371,11 +474,18 @@ export function createDatabase(filename: string): AppDatabase {
     db.pragma("foreign_keys = ON");
     if (filename !== ":memory:") db.pragma("journal_mode = WAL");
 
-    const userTables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all() as Array<{ name: string }>).map((row) => row.name);
+    const userTables = (
+      db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all() as Array<{
+        name: string;
+      }>
+    ).map((row) => row.name);
     const hasMigrations = userTables.includes("schema_migrations");
     if (!hasMigrations && userTables.length > 0) {
       let baseline = 0;
-      try { assertLegacyShape(db, true); baseline = 2; } catch {
+      try {
+        assertLegacyShape(db, true);
+        baseline = 2;
+      } catch {
         assertLegacyShape(db, false);
         baseline = 1;
       }
@@ -392,7 +502,11 @@ export function createDatabase(filename: string): AppDatabase {
       }
     } else {
       ensureMigrationTable(db);
-      if (hasMigrations && userTables.some((table) => table !== "schema_migrations") && (db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get() as { count: number }).count === 0) {
+      if (
+        hasMigrations &&
+        userTables.some((table) => table !== "schema_migrations") &&
+        (db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get() as { count: number }).count === 0
+      ) {
         throw new Error("SQLite schema migration history is incomplete");
       }
     }
@@ -408,7 +522,11 @@ export function createDatabase(filename: string): AppDatabase {
     validateDatabase(db);
     return db;
   } catch (error) {
-    try { db.close(); } catch { /* preserve the migration error */ }
+    try {
+      db.close();
+    } catch {
+      /* preserve the migration error */
+    }
     throw error;
   }
 }

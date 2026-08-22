@@ -28,7 +28,9 @@ describe("money conversions", () => {
   });
 
   it("rejects unsafe amounts and invalid currency configuration", () => {
-    expect(() => formatMinorUnits(Number.MAX_SAFE_INTEGER + 1, { isoCode: "USD", decimalDigits: 2 })).toThrow(/safe integer/i);
+    expect(() => formatMinorUnits(Number.MAX_SAFE_INTEGER + 1, { isoCode: "USD", decimalDigits: 2 })).toThrow(
+      /safe integer/i,
+    );
     expect(() => formatMinorUnits(1, { isoCode: "US", decimalDigits: 2 })).toThrow(/ISO/i);
     expect(() => formatMinorUnits(1, { isoCode: "USD", decimalDigits: 4 })).toThrow(/decimal/i);
   });
@@ -43,7 +45,6 @@ describe("money conversions", () => {
   it("rejects a converted milliunit result that is unsafe", () => {
     expect(() => minorToMilliunits(Number.MAX_SAFE_INTEGER, 2)).toThrow(/safe integer/i);
   });
-
 
   it("requires matching currency formats for linked plans", () => {
     const usd = { isoCode: "USD", decimalDigits: 2 };

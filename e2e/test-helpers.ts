@@ -9,7 +9,11 @@ export async function installFakeOAuth(page: Page, identity: FakeIdentity): Prom
   await page.context().route("**/invite/**", async (route) => {
     const upstream = await route.fetch({ maxRedirects: 0 });
     const location = upstream.headers().location ?? "/";
-    await route.fulfill({ status: 200, contentType: "text/html", body: `<script>location.replace(${JSON.stringify(location)})</script>` });
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: `<script>location.replace(${JSON.stringify(location)})</script>`,
+    });
   });
   await page.context().route("**/auth/ynab/start**", async (route) => {
     const upstream = await route.fetch({ maxRedirects: 0 });
@@ -26,7 +30,13 @@ export async function installFakeOAuth(page: Page, identity: FakeIdentity): Prom
   });
 }
 
-export async function signIn(page: Page, identity: FakeIdentity, displayName: string, _baseURL: string, startPath = "/auth/ynab/start"): Promise<void> {
+export async function signIn(
+  page: Page,
+  identity: FakeIdentity,
+  displayName: string,
+  _baseURL: string,
+  startPath = "/auth/ynab/start",
+): Promise<void> {
   await installFakeOAuth(page, identity);
   await page.goto(startPath);
   await waitForHydration(page);

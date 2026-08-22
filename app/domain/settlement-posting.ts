@@ -21,17 +21,16 @@ export interface SettlementTarget {
  * to the wrong plan (or fail in an opaque way).
  */
 export type DestinationCategoryResolver =
-  | Map<string, string>
-  | Record<string, string | undefined>
-  | ((sourceCategoryId: string) => string | null | undefined);
+  Map<string, string> | Record<string, string | undefined> | ((sourceCategoryId: string) => string | null | undefined);
 
 function resolveDestinationCategory(sourceCategoryId: string, resolver?: DestinationCategoryResolver): string | null {
   if (!resolver) return sourceCategoryId;
-  const destination = typeof resolver === "function"
-    ? resolver(sourceCategoryId)
-    : resolver instanceof Map
-      ? resolver.get(sourceCategoryId)
-      : resolver[sourceCategoryId];
+  const destination =
+    typeof resolver === "function"
+      ? resolver(sourceCategoryId)
+      : resolver instanceof Map
+        ? resolver.get(sourceCategoryId)
+        : resolver[sourceCategoryId];
   return destination?.trim() || null;
 }
 
@@ -45,7 +44,13 @@ export function buildSettlementTarget(
   if (!splittingCategoryId.trim()) throw new Error("destination Splitting category is required");
   const preview = buildSettlementPreview(memberId, entries);
   const counterparty = memberId === "adam" ? "Chelsea" : "Adam";
-  if (mode === "simple") return { parentAmountMinor: preview.netMinor, payee: counterparty, categoryId: splittingCategoryId, subtransactions: [] };
+  if (mode === "simple")
+    return {
+      parentAmountMinor: preview.netMinor,
+      payee: counterparty,
+      categoryId: splittingCategoryId,
+      subtransactions: [],
+    };
 
   const subtransactions: SettlementSubtransaction[] = [];
   let aggregateSplitting = 0;
@@ -61,8 +66,10 @@ export function buildSettlementTarget(
     }
     if (debt < 0) aggregateSplitting += -debt;
   }
-  if (aggregateSplitting !== 0) subtransactions.push({ amountMinor: aggregateSplitting, categoryId: splittingCategoryId, memo: "YS:aggregate" });
-  if (subtransactions.reduce((sum, line) => sum + line.amountMinor, 0) !== preview.netMinor) throw new Error("settlement subtransactions must sum to parent");
+  if (aggregateSplitting !== 0)
+    subtransactions.push({ amountMinor: aggregateSplitting, categoryId: splittingCategoryId, memo: "YS:aggregate" });
+  if (subtransactions.reduce((sum, line) => sum + line.amountMinor, 0) !== preview.netMinor)
+    throw new Error("settlement subtransactions must sum to parent");
   return { parentAmountMinor: preview.netMinor, payee: counterparty, categoryId: null, subtransactions };
 }
 

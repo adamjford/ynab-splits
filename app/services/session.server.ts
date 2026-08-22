@@ -25,7 +25,10 @@ function serialize(name: string, value: string, env: AppEnv, maxAge: number, exp
 
 function cookieValue(cookieHeader: string | null, name: string): string | null {
   if (!cookieHeader) return null;
-  const match = cookieHeader.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
+  const match = cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
   return match ? match.slice(name.length + 1) : null;
 }
 

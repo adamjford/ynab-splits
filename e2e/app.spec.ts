@@ -18,10 +18,14 @@ test("onboards both identities with isolated cookies and an invite", async ({ br
   const chelsea = await newContext(browser);
   const chelseaPage = await chelsea.newPage();
   await signIn(chelseaPage, "chelsea", "Chelsea", baseURL!, invitePath);
-  await expect(chelseaPage.context().cookies()).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ name: "ynab_splits_auth" })]));
+  await expect(chelseaPage.context().cookies()).resolves.toEqual(
+    expect.arrayContaining([expect.objectContaining({ name: "ynab_splits_auth" })]),
+  );
   const adamCookies = await adam.cookies();
   const chelseaCookies = await chelsea.cookies();
-  expect(adamCookies.find((cookie) => cookie.name === "ynab_splits_auth")?.value).not.toBe(chelseaCookies.find((cookie) => cookie.name === "ynab_splits_auth")?.value);
+  expect(adamCookies.find((cookie) => cookie.name === "ynab_splits_auth")?.value).not.toBe(
+    chelseaCookies.find((cookie) => cookie.name === "ynab_splits_auth")?.value,
+  );
   await expect(chelseaPage.getByRole("link", { name: "YNAB settings" })).toBeVisible();
 
   await configurePlan(adamPage, "adam");
@@ -72,17 +76,30 @@ test("keeps owner-private ledger controls out of the other member's detail view"
     await signIn(adamPage, "adam", "Adam", baseURL!);
     await configurePlan(adamPage, "adam");
 
-    const sourceUpdate = await adamPage.request.put(`${FAKE_ORIGIN}/v1/plans/fake-plan-adam/transactions/fake-transaction-adam-1`, {
-      headers: { Authorization: "Bearer fake-access-adam" },
-      data: {
-        transaction: {
-          subtransactions: [
-            { amount: -9440, category_id: "fake-category-groceries-adam", payee_name: "Local market", memo: "Owner share" },
-            { amount: -9450, category_id: "fake-category-splitting-adam", payee_name: "Local market", memo: "Household share" },
-          ],
+    const sourceUpdate = await adamPage.request.put(
+      `${FAKE_ORIGIN}/v1/plans/fake-plan-adam/transactions/fake-transaction-adam-1`,
+      {
+        headers: { Authorization: "Bearer fake-access-adam" },
+        data: {
+          transaction: {
+            subtransactions: [
+              {
+                amount: -9440,
+                category_id: "fake-category-groceries-adam",
+                payee_name: "Local market",
+                memo: "Owner share",
+              },
+              {
+                amount: -9450,
+                category_id: "fake-category-splitting-adam",
+                payee_name: "Local market",
+                memo: "Household share",
+              },
+            ],
+          },
         },
       },
-    });
+    );
     expect(sourceUpdate.ok()).toBeTruthy();
 
     await adamPage.goto("/inbox");
@@ -112,9 +129,12 @@ test("keeps owner-private ledger controls out of the other member's detail view"
     await expect(adamPage.getByRole("button", { name: "Verify" })).toBeVisible();
     await expect(adamPage.getByRole("button", { name: "Dismiss" })).toBeVisible();
 
-    await adamPage.locator('input[name="taskId"]').last().evaluate((element) => {
-      (element as HTMLInputElement).value = "forged-task-id";
-    });
+    await adamPage
+      .locator('input[name="taskId"]')
+      .last()
+      .evaluate((element) => {
+        (element as HTMLInputElement).value = "forged-task-id";
+      });
     await adamPage.getByRole("button", { name: "Dismiss" }).click();
     await expect(adamPage.getByRole("alert")).toHaveText("Verification failed.");
     await expect(adamPage.getByRole("heading", { name: "Manual YNAB steps" })).toBeVisible();
@@ -159,7 +179,10 @@ test("reviews an inbox transaction, creates a zero-net settlement, and restores 
   await expect(page.getByRole("heading", { name: "Ledger" })).toBeVisible();
   await expect(page.getByText("Local market")).toBeVisible();
 
-  const create = await page.request.post(`${baseURL}/settlements/new.data`, { form: { startDate: "2026-08-01", endDate: "2026-08-01", confirmPayment: "on" }, headers: { Accept: "application/json" } });
+  const create = await page.request.post(`${baseURL}/settlements/new.data`, {
+    form: { startDate: "2026-08-01", endDate: "2026-08-01", confirmPayment: "on" },
+    headers: { Accept: "application/json" },
+  });
   expect(create.ok()).toBeTruthy();
   const createBody = await create.text();
   const settlementId = /"settlementId","([^"]+)"/.exec(createBody)?.[1];
@@ -169,7 +192,10 @@ test("reviews an inbox transaction, creates a zero-net settlement, and restores 
   await expect(page.getByText(/2026-08-01 through 2026-08-01/)).toBeVisible();
   await expect(page.getByText(/· 0 · closed/)).toBeVisible();
 
-  const voided = await page.request.post(`${baseURL}/settlements/${settlementId}.data`, { form: { intent: "void", confirmVoid: "on" }, headers: { Accept: "application/json" } });
+  const voided = await page.request.post(`${baseURL}/settlements/${settlementId}.data`, {
+    form: { intent: "void", confirmVoid: "on" },
+    headers: { Accept: "application/json" },
+  });
   expect(voided.ok()).toBeTruthy();
   await page.goto(`/settlements/${settlementId}`);
   await waitForHydration(page);
@@ -185,7 +211,11 @@ test("supports logout and responsive navigation without retaining the session", 
   await signIn(page, "adam", "Adam", baseURL!);
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
   await page.context().unroute("**/auth/ynab/start**");
-  await page.context().route("**/auth/ynab/start**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<h1>Signed out</h1>" }));
+  await page
+    .context()
+    .route("**/auth/ynab/start**", (route) =>
+      route.fulfill({ status: 200, contentType: "text/html", body: "<h1>Signed out</h1>" }),
+    );
   await page.getByRole("button", { name: "Log out" }).click();
   await expect(page).toHaveURL(/\/auth\/ynab\/start/);
   const root = await page.request.get(`${baseURL}/`, { maxRedirects: 0 });

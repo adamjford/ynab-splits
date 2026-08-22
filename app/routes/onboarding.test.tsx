@@ -43,7 +43,7 @@ describe("onboarding action", () => {
         },
         body: "displayName=Adam",
       });
-      const response = await action({ request } as never) as Response;
+      const response = (await action({ request } as never)) as Response;
 
       expect(response.status).toBe(302);
       expect(response.headers.get("Location")).toBe("/auth/ynab/start");

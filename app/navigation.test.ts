@@ -3,9 +3,7 @@ import { APP_DESTINATIONS, DASHBOARD_DESTINATION, isDestinationCurrent } from ".
 
 describe("navigation destinations", () => {
   it("navigation destinations expose labels, paths, keywords, and route matching", () => {
-    expect(
-      APP_DESTINATIONS.map(({ label, to, keywords }) => ({ label, to, keywords })),
-    ).toEqual([
+    expect(APP_DESTINATIONS.map(({ label, to, keywords }) => ({ label, to, keywords }))).toEqual([
       { label: "Dashboard", to: "/", keywords: ["home", "overview"] },
       { label: "Inbox", to: "/inbox", keywords: ["transactions", "review"] },
       { label: "Ledger", to: "/ledger", keywords: ["entries", "expenses"] },
@@ -46,13 +44,7 @@ describe("navigation destinations", () => {
       expect(isDestinationCurrent(destination!, pathname)).toBe(expected);
     }
 
-    const knownPaths = [
-      "/",
-      "/inbox",
-      "/ledger/entry-123",
-      "/settlements/settlement-123",
-      "/settings/ynab",
-    ];
+    const knownPaths = ["/", "/inbox", "/ledger/entry-123", "/settlements/settlement-123", "/settings/ynab"];
     for (const pathname of knownPaths) {
       expect(APP_DESTINATIONS.filter((destination) => isDestinationCurrent(destination, pathname))).toHaveLength(1);
     }

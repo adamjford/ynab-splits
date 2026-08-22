@@ -29,7 +29,9 @@ async function createPositiveSettlement(page: Page, baseURL: string): Promise<st
   await expect(confirmation).toBeChecked();
 
   const create = page.getByRole("button", { name: "Create settlement" });
-  const responsePromise = page.waitForResponse((response) => response.request().method() === "POST" && response.url().includes("/settlements/new"));
+  const responsePromise = page.waitForResponse(
+    (response) => response.request().method() === "POST" && response.url().includes("/settlements/new"),
+  );
   await create.focus();
   await page.keyboard.press("Enter");
   const response = await responsePromise;

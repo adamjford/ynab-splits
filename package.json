@@ -9,6 +9,8 @@
     "build": "react-router build",
     "dev": "react-router dev",
     "start": "react-router-serve ./build/server/index.js",
+    "format": "prettier --write \"**/*.{js,mjs,cjs,jsx,ts,tsx,json,css,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{js,mjs,cjs,jsx,ts,tsx,json,css,yml,yaml}\"",
     "lint": "eslint . --ext .js,.ts,.tsx",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -17,7 +19,7 @@
     "typecheck": "react-router typegen && tsc --noEmit",
     "db:migrate": "tsx scripts/migrate.ts",
     "import:2026": "tsx scripts/import-2026.ts",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build && pnpm test:e2e"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build && pnpm test:e2e"
   },
   "dependencies": {
     "@react-router/node": "8.3.0",
@@ -43,6 +45,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^9.39.5",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "prettier": "^3.9.6",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3",

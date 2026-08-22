@@ -5,7 +5,11 @@ test.describe.configure({ mode: "serial" });
 
 type Viewport = { width: number; height: number };
 
-async function signedInPage(browser: Browser, baseURL: string, viewport?: Viewport): Promise<{ context: BrowserContext; page: Page }> {
+async function signedInPage(
+  browser: Browser,
+  baseURL: string,
+  viewport?: Viewport,
+): Promise<{ context: BrowserContext; page: Page }> {
   const context = await newContext(browser);
   const page = await context.newPage();
   if (viewport) await page.setViewportSize(viewport);
@@ -19,7 +23,7 @@ async function ensureLocalMarketEntry(page: Page): Promise<void> {
   await page.goto("/ledger");
   await waitForHydration(page);
   const existingEntry = page.getByRole("link", { name: "Local market", exact: true });
-  if (await existingEntry.count() > 0) return;
+  if ((await existingEntry.count()) > 0) return;
   await page.goto("/inbox");
   await waitForHydration(page);
   const review = page.getByRole("article").filter({ hasText: "Local market" });
@@ -62,20 +66,27 @@ async function closePalette(page: Page): Promise<void> {
   await expect(dialog(page)).not.toBeVisible();
 }
 
-async function dispatchShortcut(page: Page, modifiers: { controlKey?: boolean; metaKey?: boolean; shiftKey?: boolean; altKey?: boolean }): Promise<void> {
+async function dispatchShortcut(
+  page: Page,
+  modifiers: { controlKey?: boolean; metaKey?: boolean; shiftKey?: boolean; altKey?: boolean },
+): Promise<void> {
   await page.evaluate((options) => {
     const { controlKey, ...keyboardOptions } = options;
-    document.dispatchEvent(new KeyboardEvent("keydown", {
-      key: "k",
-      bubbles: true,
-      cancelable: true,
-      ctrlKey: controlKey,
-      ...keyboardOptions,
-    }));
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "k",
+        bubbles: true,
+        cancelable: true,
+        ctrlKey: controlKey,
+        ...keyboardOptions,
+      }),
+    );
   }, modifiers);
 }
 
-async function focusStyle(locator: Locator): Promise<{ outlineStyle: string; outlineWidth: number; outlineOffset: number }> {
+async function focusStyle(
+  locator: Locator,
+): Promise<{ outlineStyle: string; outlineWidth: number; outlineOffset: number }> {
   return locator.evaluate((element) => {
     const style = getComputedStyle(element);
     return {
@@ -105,7 +116,14 @@ test("supports skip navigation and current-section semantics", async ({ browser,
     await expect(skip).toBeVisible();
     const skipBounds = await skip.evaluate((element) => {
       const rect = element.getBoundingClientRect();
-      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight };
+      return {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      };
     });
     expect(skipBounds.left).toBeGreaterThanOrEqual(0);
     expect(skipBounds.top).toBeGreaterThanOrEqual(0);
@@ -126,9 +144,10 @@ test("supports skip navigation and current-section semantics", async ({ browser,
     const headerLabels = ["Household ledger", "Inbox", "Ledger", "Settle up", "YNAB settings", "Navigate", "Log out"];
     for (const label of headerLabels) {
       await page.keyboard.press("Tab");
-      const control = label === "Navigate" || label === "Log out"
-        ? page.getByRole("button", { name: label, exact: true })
-        : page.getByRole("link", { name: label, exact: true });
+      const control =
+        label === "Navigate" || label === "Log out"
+          ? page.getByRole("button", { name: label, exact: true })
+          : page.getByRole("link", { name: label, exact: true });
       await expect(control).toBeFocused();
       await expect(page.getByText("Adam", { exact: true }).first()).not.toBeFocused();
     }
@@ -239,15 +258,22 @@ test("opens quick navigation by pointer and exact keyboard shortcut", async ({ b
     await planId.focus();
     const keyboardResult = await page.evaluate(() => {
       let defaultPreventedAfterBubble: boolean | undefined;
-      document.addEventListener("keydown", (event) => {
-        if (event.key.toLowerCase() === "k") defaultPreventedAfterBubble = event.defaultPrevented;
-      }, { once: true });
-      const dispatched = document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", {
-        key: "k",
-        ctrlKey: true,
-        bubbles: true,
-        cancelable: true,
-      })) ?? false;
+      document.addEventListener(
+        "keydown",
+        (event) => {
+          if (event.key.toLowerCase() === "k") defaultPreventedAfterBubble = event.defaultPrevented;
+        },
+        { once: true },
+      );
+      const dispatched =
+        document.activeElement?.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "k",
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true,
+          }),
+        ) ?? false;
       return { dispatched, defaultPreventedAfterBubble };
     });
     expect(keyboardResult.dispatched).toBe(true);
@@ -299,7 +325,10 @@ test("filters and activates visible quick-navigation results", async ({ browser,
     await expect(dialog(page).getByRole("link", { name: "Dashboard", exact: true })).toBeFocused();
     await page.keyboard.press("End");
     await expect(dialog(page).getByRole("link", { name: "YNAB settings", exact: true })).toBeFocused();
-    await expect(dialog(page).getByRole("link", { name: "Settle up", exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(dialog(page).getByRole("link", { name: "Settle up", exact: true })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     await closePalette(page);
 
     await openPalette(page);
@@ -377,7 +406,9 @@ test("restores focus after palette dismissal", async ({ browser, baseURL }) => {
     await expect(dialog(page)).not.toBeVisible();
     for (let i = 0; i < 8; i += 1) {
       await page.keyboard.press("Tab");
-      await expect.poll(() => page.evaluate(() => document.querySelector("dialog")?.contains(document.activeElement) ?? false)).toBe(false);
+      await expect
+        .poll(() => page.evaluate(() => document.querySelector("dialog")?.contains(document.activeElement) ?? false))
+        .toBe(false);
     }
   } finally {
     await context.close();
@@ -387,7 +418,9 @@ test("restores focus after palette dismissal", async ({ browser, baseURL }) => {
 test("renders keyboard-visible controls without mobile overflow", async ({ browser, baseURL }) => {
   const { context, page } = await signedInPage(browser, baseURL!, { width: 390, height: 844 });
   try {
-    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth))
+      .toBe(true);
     const controls = [
       page.getByRole("link", { name: "Household ledger", exact: true }),
       page.getByRole("link", { name: "Inbox", exact: true }),
@@ -402,7 +435,10 @@ test("renders keyboard-visible controls without mobile overflow", async ({ brows
       await expect.poll(async () => (await control.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
     }
     await openPalette(page);
-    for (const [target, minimumHeight] of [[dialog(page), 0], [navigationFilter(page), 24]] as const) {
+    for (const [target, minimumHeight] of [
+      [dialog(page), 0],
+      [navigationFilter(page), 24],
+    ] as const) {
       const bounds = await target.evaluate((element) => {
         const rect = element.getBoundingClientRect();
         return {
@@ -425,7 +461,6 @@ test("renders keyboard-visible controls without mobile overflow", async ({ brows
       expect(bounds.height).toBeGreaterThanOrEqual(minimumHeight);
     }
     await closePalette(page);
-
 
     const householdLink = page.getByRole("link", { name: "Household ledger", exact: true });
     const representativeLink = page.getByRole("link", { name: "Inbox", exact: true });
@@ -455,7 +490,6 @@ test("renders keyboard-visible controls without mobile overflow", async ({ brows
     expect(inputFocus.outlineStyle).not.toBe("none");
     expect(inputFocus.outlineWidth).toBeGreaterThanOrEqual(2);
     expect(inputFocus.outlineOffset).toBeGreaterThan(0);
-
 
     await representativeLink.focus();
     const linkBeforeHover = await hoverStyle(representativeLink);

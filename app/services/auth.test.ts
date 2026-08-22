@@ -19,11 +19,16 @@ const env: AppEnv = {
 
 const user: YnabUser = { id: "ynab-user-1" };
 
-function tokenResponse(overrides: Partial<{ access_token: string; refresh_token: string; expires_in: number }> = {}): Response {
-  return new Response(JSON.stringify({ access_token: "access-token", refresh_token: "refresh-token", expires_in: 3600, ...overrides }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+function tokenResponse(
+  overrides: Partial<{ access_token: string; refresh_token: string; expires_in: number }> = {},
+): Response {
+  return new Response(
+    JSON.stringify({ access_token: "access-token", refresh_token: "refresh-token", expires_in: 3600, ...overrides }),
+    {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 describe("YNAB OAuth service", () => {
@@ -57,21 +62,31 @@ describe("YNAB OAuth service", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0].method).toBe("POST");
     expect(requests[0].headers).toEqual({ "Content-Type": "application/x-www-form-urlencoded" });
-    expect([...new URLSearchParams(requests[0].body as string)]).toEqual([...new URLSearchParams({
-      client_id: env.YNAB_CLIENT_ID,
-      client_secret: env.YNAB_CLIENT_SECRET,
-      redirect_uri: `${env.APP_ORIGIN}/auth/ynab/callback`,
-      grant_type: "authorization_code",
-      code: "code-1",
-      code_verifier: "verifier-1",
-    })]);
+    expect([...new URLSearchParams(requests[0].body as string)]).toEqual([
+      ...new URLSearchParams({
+        client_id: env.YNAB_CLIENT_ID,
+        client_secret: env.YNAB_CLIENT_SECRET,
+        redirect_uri: `${env.APP_ORIGIN}/auth/ynab/callback`,
+        grant_type: "authorization_code",
+        code: "code-1",
+        code_verifier: "verifier-1",
+      }),
+    ]);
     expect(requests[0].signal).toBeInstanceOf(AbortSignal);
   });
 
   it.each([
     { name: "denial", response: new Response("denied", { status: 400 }), expected: { kind: "http", status: 400 } },
-    { name: "unauthorized", response: new Response("unauthorized", { status: 401 }), expected: { kind: "unauthorized", status: 401 } },
-    { name: "rate limit", response: new Response("slow down", { status: 429 }), expected: { kind: "rate_limit", status: 429 } },
+    {
+      name: "unauthorized",
+      response: new Response("unauthorized", { status: 401 }),
+      expected: { kind: "unauthorized", status: 401 },
+    },
+    {
+      name: "rate limit",
+      response: new Response("slow down", { status: 429 }),
+      expected: { kind: "rate_limit", status: 429 },
+    },
     { name: "malformed JSON", response: new Response("not-json", { status: 200 }), expected: { kind: "malformed" } },
     { name: "malformed token", response: tokenResponse({ refresh_token: "" }), expected: { kind: "malformed" } },
   ])("keeps $name token exchange failures explicit", async ({ response, expected }) => {
@@ -80,15 +95,23 @@ describe("YNAB OAuth service", () => {
   });
 
   it("classifies network failures separately from an aborted timeout", async () => {
-    await expect(exchangeCode(env, "code-1", "verifier-1", async () => {
-      throw new Error("offline");
-    })).rejects.toMatchObject({ kind: "network" });
+    await expect(
+      exchangeCode(env, "code-1", "verifier-1", async () => {
+        throw new Error("offline");
+      }),
+    ).rejects.toMatchObject({ kind: "network" });
 
     vi.useFakeTimers();
     try {
-      const timeoutRequest = exchangeCode(env, "code-1", "verifier-1", async (_url, init) => new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
-      }));
+      const timeoutRequest = exchangeCode(
+        env,
+        "code-1",
+        "verifier-1",
+        async (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+          }),
+      );
       const assertion = expect(timeoutRequest).rejects.toMatchObject({ kind: "timeout" });
       await vi.advanceTimersByTimeAsync(15_001);
       await assertion;
@@ -99,13 +122,26 @@ describe("YNAB OAuth service", () => {
 
   it("creates a local user and encrypted connection for a new YNAB identity", () => {
     const db = createDatabase(":memory:");
-    const localUserId = persistConnection(db, env, user, "Pending", { access_token: "new-access", refresh_token: "new-refresh", expires_in: 3600 });
+    const localUserId = persistConnection(db, env, user, "Pending", {
+      access_token: "new-access",
+      refresh_token: "new-refresh",
+      expires_in: 3600,
+    });
     expect(localUserId).toEqual(expect.any(String));
-    const saved = db.prepare(`
+    const saved = db
+      .prepare(
+        `
       select u.id, u.display_name, c.encrypted_access_token, c.encrypted_refresh_token
       from users u join oauth_connections c on c.user_id = u.id
       where u.ynab_user_id = ?
-    `).get(user.id) as { id: string; display_name: string; encrypted_access_token: string; encrypted_refresh_token: string };
+    `,
+      )
+      .get(user.id) as {
+      id: string;
+      display_name: string;
+      encrypted_access_token: string;
+      encrypted_refresh_token: string;
+    };
     expect(saved).toMatchObject({ id: localUserId, display_name: "Pending" });
     expect(decryptSecret(saved.encrypted_access_token, env.TOKEN_ENCRYPTION_KEY)).toBe("new-access");
     expect(decryptSecret(saved.encrypted_refresh_token, env.TOKEN_ENCRYPTION_KEY)).toBe("new-refresh");
@@ -116,7 +152,11 @@ describe("YNAB OAuth service", () => {
     const db = createDatabase(":memory:");
     db.prepare("insert into users (id, ynab_user_id, display_name) values ('u1', ?, 'Old name')").run(user.id);
 
-    const firstId = persistConnection(db, env, user, "First name", { access_token: "access-one", refresh_token: "refresh-one", expires_in: 3600 });
+    const firstId = persistConnection(db, env, user, "First name", {
+      access_token: "access-one",
+      refresh_token: "refresh-one",
+      expires_in: 3600,
+    });
     const first = db.prepare("select * from oauth_connections where user_id = 'u1'").get() as {
       id: string;
       encrypted_access_token: string;
@@ -133,7 +173,11 @@ describe("YNAB OAuth service", () => {
     expect(db.prepare("select display_name from users where id = 'u1'").get()).toEqual({ display_name: "Old name" });
 
     db.prepare("update oauth_connections set disconnected_at = '2026-01-01T00:00:00.000Z' where user_id = 'u1'").run();
-    const secondId = persistConnection(db, env, user, "Reauthorized name", { access_token: "access-two", refresh_token: "refresh-two", expires_in: 7200 });
+    const secondId = persistConnection(db, env, user, "Reauthorized name", {
+      access_token: "access-two",
+      refresh_token: "refresh-two",
+      expires_in: 7200,
+    });
     const second = db.prepare("select * from oauth_connections where user_id = 'u1'").get() as {
       id: string;
       encrypted_access_token: string;
@@ -142,7 +186,9 @@ describe("YNAB OAuth service", () => {
     };
     expect(secondId).toBe("u1");
     expect(second.id).toBe(first.id);
-    expect(db.prepare("select count(*) as count from oauth_connections where user_id = 'u1'").get()).toEqual({ count: 1 });
+    expect(db.prepare("select count(*) as count from oauth_connections where user_id = 'u1'").get()).toEqual({
+      count: 1,
+    });
     expect(db.prepare("select display_name from users where id = 'u1'").get()).toEqual({ display_name: "Old name" });
     expect(decryptSecret(second.encrypted_access_token, env.TOKEN_ENCRYPTION_KEY)).toBe("access-two");
     expect(decryptSecret(second.encrypted_refresh_token, env.TOKEN_ENCRYPTION_KEY)).toBe("refresh-two");

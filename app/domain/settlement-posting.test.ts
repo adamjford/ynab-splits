@@ -3,27 +3,65 @@ import { buildSettlementTarget, settlementImportId } from "./settlement-posting"
 import type { LedgerEntry } from "./ledger";
 
 const entries: LedgerEntry[] = [
-  { id: "amazon", kind: "expense", amountMinor: 1889, cashMemberId: "adam", categoryId: "groceries", shares: [{ memberId: "adam", amountMinor: 945 }, { memberId: "chelsea", amountMinor: 944 }], date: "2026-01-01", description: "Amazon" },
-  { id: "parking", kind: "expense", amountMinor: 1250, cashMemberId: "chelsea", categoryId: "hospital", shares: [{ memberId: "chelsea", amountMinor: 625 }, { memberId: "adam", amountMinor: 625 }], date: "2026-01-02", description: "Parking" },
+  {
+    id: "amazon",
+    kind: "expense",
+    amountMinor: 1889,
+    cashMemberId: "adam",
+    categoryId: "groceries",
+    shares: [
+      { memberId: "adam", amountMinor: 945 },
+      { memberId: "chelsea", amountMinor: 944 },
+    ],
+    date: "2026-01-01",
+    description: "Amazon",
+  },
+  {
+    id: "parking",
+    kind: "expense",
+    amountMinor: 1250,
+    cashMemberId: "chelsea",
+    categoryId: "hospital",
+    shares: [
+      { memberId: "chelsea", amountMinor: 625 },
+      { memberId: "adam", amountMinor: 625 },
+    ],
+    date: "2026-01-02",
+    description: "Parking",
+  },
 ];
 
 describe("buildSettlementTarget", () => {
   it("builds Adam's detailed Option Two shape", () => {
-    expect(buildSettlementTarget("adam", entries, "detailed", "splitting")).toEqual({ parentAmountMinor: 319, payee: "Chelsea", categoryId: null, subtransactions: [{ amountMinor: -625, categoryId: "hospital", memo: "YS:parking" }, { amountMinor: 944, categoryId: "splitting", memo: "YS:aggregate" }] });
+    expect(buildSettlementTarget("adam", entries, "detailed", "splitting")).toEqual({
+      parentAmountMinor: 319,
+      payee: "Chelsea",
+      categoryId: null,
+      subtransactions: [
+        { amountMinor: -625, categoryId: "hospital", memo: "YS:parking" },
+        { amountMinor: 944, categoryId: "splitting", memo: "YS:aggregate" },
+      ],
+    });
   });
   it("ignores voided entries in detailed totals and subtransactions", () => {
     const voided: LedgerEntry = {
       ...entries[1],
       id: "voided",
       voidedAt: "2026-01-03",
-      shares: [{ memberId: "chelsea", amountMinor: 0 }, { memberId: "adam", amountMinor: 100 }],
+      shares: [
+        { memberId: "chelsea", amountMinor: 0 },
+        { memberId: "adam", amountMinor: 100 },
+      ],
       amountMinor: 100,
     };
     expect(buildSettlementTarget("adam", [...entries, voided], "detailed", "splitting")).toEqual({
       parentAmountMinor: 319,
       payee: "Chelsea",
       categoryId: null,
-      subtransactions: [{ amountMinor: -625, categoryId: "hospital", memo: "YS:parking" }, { amountMinor: 944, categoryId: "splitting", memo: "YS:aggregate" }],
+      subtransactions: [
+        { amountMinor: -625, categoryId: "hospital", memo: "YS:parking" },
+        { amountMinor: 944, categoryId: "splitting", memo: "YS:aggregate" },
+      ],
     });
   });
 
@@ -32,7 +70,10 @@ describe("buildSettlementTarget", () => {
       ...entries[1],
       id: "voided-only",
       voidedAt: "2026-01-03",
-      shares: [{ memberId: "chelsea", amountMinor: 0 }, { memberId: "adam", amountMinor: 100 }],
+      shares: [
+        { memberId: "chelsea", amountMinor: 0 },
+        { memberId: "adam", amountMinor: 100 },
+      ],
       amountMinor: 100,
     };
     expect(buildSettlementTarget("adam", [voided], "detailed", "splitting")).toEqual({
@@ -43,19 +84,31 @@ describe("buildSettlementTarget", () => {
     });
   });
 
-
   it("builds a simple whole transfer", () => {
-    expect(buildSettlementTarget("chelsea", entries, "simple", "splitting")).toMatchObject({ parentAmountMinor: -319, categoryId: "splitting", subtransactions: [] });
+    expect(buildSettlementTarget("chelsea", entries, "simple", "splitting")).toMatchObject({
+      parentAmountMinor: -319,
+      categoryId: "splitting",
+      subtransactions: [],
+    });
   });
   it("resolves detailed source categories only through the destination mapping", () => {
-    expect(buildSettlementTarget("adam", entries, "detailed", "splitting", new Map([["hospital", "dest-hospital"]]))).toMatchObject({
-      subtransactions: [{ amountMinor: -625, categoryId: "dest-hospital" }, { amountMinor: 944, categoryId: "splitting" }],
+    expect(
+      buildSettlementTarget("adam", entries, "detailed", "splitting", new Map([["hospital", "dest-hospital"]])),
+    ).toMatchObject({
+      subtransactions: [
+        { amountMinor: -625, categoryId: "dest-hospital" },
+        { amountMinor: 944, categoryId: "splitting" },
+      ],
     });
     expect(() => buildSettlementTarget("adam", entries, "detailed", "splitting", {})).toThrow(/mapping/i);
   });
 
   it("supports resolver functions, validates Splitting, and emits bounded stable import IDs", () => {
-    expect(buildSettlementTarget("adam", entries, "detailed", "splitting", (source) => source === "hospital" ? "mapped" : null).subtransactions[0].categoryId).toBe("mapped");
+    expect(
+      buildSettlementTarget("adam", entries, "detailed", "splitting", (source) =>
+        source === "hospital" ? "mapped" : null,
+      ).subtransactions[0].categoryId,
+    ).toBe("mapped");
     expect(() => buildSettlementTarget("adam", entries, "simple", " ")).toThrow(/Splitting/i);
     const id = settlementImportId("posting-123");
     expect(id.length).toBeLessThanOrEqual(36);
@@ -98,7 +151,10 @@ describe("buildSettlementTarget", () => {
     const zeroDebt = {
       ...entries[0],
       id: "zero",
-      shares: [{ memberId: "adam", amountMinor: 1889 }, { memberId: "chelsea", amountMinor: 0 }],
+      shares: [
+        { memberId: "adam", amountMinor: 1889 },
+        { memberId: "chelsea", amountMinor: 0 },
+      ],
     } satisfies LedgerEntry;
     expect(buildSettlementTarget("adam", [zeroDebt], "detailed", "splitting")).toMatchObject({
       parentAmountMinor: 0,
@@ -107,14 +163,19 @@ describe("buildSettlementTarget", () => {
   });
 
   it("rejects blank mapped destination categories", () => {
-    expect(() => buildSettlementTarget("adam", entries, "detailed", "splitting", new Map([["hospital", "  "]]))).toThrow(/mapping/i);
+    expect(() =>
+      buildSettlementTarget("adam", entries, "detailed", "splitting", new Map([["hospital", "  "]])),
+    ).toThrow(/mapping/i);
   });
 
   it("reports impossible subtransaction totals instead of posting malformed data", () => {
     const malformed = {
       ...entries[0],
       amountMinor: Number.NaN,
-      shares: [{ memberId: "adam", amountMinor: 0 }, { memberId: "chelsea", amountMinor: Number.NaN }],
+      shares: [
+        { memberId: "adam", amountMinor: 0 },
+        { memberId: "chelsea", amountMinor: Number.NaN },
+      ],
     } satisfies LedgerEntry;
     expect(() => buildSettlementTarget("adam", [malformed], "detailed", "splitting")).toThrow(/sum to parent/i);
   });

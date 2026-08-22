@@ -16,12 +16,17 @@ function scaleFor(decimalDigits: number): number {
   }
   return 10 ** (3 - decimalDigits);
 }
-export function formatMinorUnits(amountMinor: number, currency: CurrencyFormat | null | undefined): FormattedMinorUnits {
+export function formatMinorUnits(
+  amountMinor: number,
+  currency: CurrencyFormat | null | undefined,
+): FormattedMinorUnits {
   if (!Number.isSafeInteger(amountMinor)) throw new RangeError("minor amount must be a safe integer");
-  if (!currency) return { status: "configuration-required", message: "Configure a household currency before displaying amounts." };
+  if (!currency)
+    return { status: "configuration-required", message: "Configure a household currency before displaying amounts." };
   const decimalDigits = currency.decimalDigits;
   scaleFor(decimalDigits);
-  if (!/^[A-Z]{3}$/.test(currency.isoCode)) throw new RangeError("currency ISO code must be a three-letter uppercase code");
+  if (!/^[A-Z]{3}$/.test(currency.isoCode))
+    throw new RangeError("currency ISO code must be a three-letter uppercase code");
   const normalizedAmount = Object.is(amountMinor, -0) ? 0 : amountMinor;
   return new Intl.NumberFormat("en-US", {
     style: "currency",

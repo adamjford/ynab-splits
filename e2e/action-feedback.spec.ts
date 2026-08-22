@@ -98,14 +98,19 @@ test("keeps a stale inbox review unsuccessful and asks for a refresh", async ({ 
     await waitForHydration(page);
 
     const review = page.getByRole("article").filter({ hasText: "Local market" });
-    const remoteChange = await page.request.put(`${FAKE_ORIGIN}/v1/plans/fake-plan-adam/transactions/fake-transaction-adam-1`, {
-      headers: { Authorization: "Bearer fake-access-adam" },
-      data: { transaction: { payee_name: "Changed after review" } },
-    });
+    const remoteChange = await page.request.put(
+      `${FAKE_ORIGIN}/v1/plans/fake-plan-adam/transactions/fake-transaction-adam-1`,
+      {
+        headers: { Authorization: "Bearer fake-access-adam" },
+        data: { transaction: { payee_name: "Changed after review" } },
+      },
+    );
     expect(remoteChange.ok()).toBeTruthy();
 
     await review.getByRole("button", { name: "Not shared" }).click();
-    await expect(page.getByRole("alert")).toHaveText("The reviewed transaction changed; refresh the inbox before saving.");
+    await expect(page.getByRole("alert")).toHaveText(
+      "The reviewed transaction changed; refresh the inbox before saving.",
+    );
     await expect(page.getByRole("article")).toHaveCount(1);
     await expect(page.getByRole("article")).toContainText("Changed after review");
   } finally {

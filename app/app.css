@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+    "Noto Color Emoji";
 }
 
 html,
@@ -19,7 +20,7 @@ body {
  * selectors intentionally include native controls and explicit tabindex
  * targets so route-level utility classes cannot remove the focus indicator.
  */
- :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 3px solid rgb(245 158 11);
   outline-offset: 3px;
   box-shadow: 0 0 0 2px rgb(15 23 42);
@@ -41,22 +42,22 @@ header button {
 }
 
 /* Pointer feedback is additive, so route-specific colors remain authoritative. */
- :where(a:not([aria-current="page"])):hover {
+:where(a:not([aria-current="page"])):hover {
   text-decoration-line: underline;
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
 }
 
- :where(a:not([aria-current="page"]):not([class*="bg-"])):hover,
- :where(button:not(:disabled):not([class*="bg-"])):hover {
+:where(a:not([aria-current="page"]):not([class*="bg-"])):hover,
+:where(button:not(:disabled):not([class*="bg-"])):hover {
   background-color: rgb(241 245 249);
 }
 
- :where(button:not(:disabled)):hover {
+:where(button:not(:disabled)):hover {
   filter: brightness(0.94);
 }
 
- :where(button:not(:disabled)):active {
+:where(button:not(:disabled)):active {
   filter: brightness(0.86);
 }
 

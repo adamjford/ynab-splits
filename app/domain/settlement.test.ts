@@ -40,21 +40,23 @@ describe("buildSettlementPreview", () => {
   });
 
   it("reports a zero-net period without a transfer direction", () => {
-    expect(buildSettlementPreview("adam", [
-      ...entries,
-      {
-        id: "refund",
-        kind: "income",
-        amountMinor: 319,
-        cashMemberId: "adam",
-        shares: [
-          { memberId: "adam", amountMinor: 0 },
-          { memberId: "chelsea", amountMinor: 319 },
-        ],
-        date: "2026-01-03",
-        description: "Refund",
-      },
-    ])).toMatchObject({ netMinor: 0, direction: "settled" });
+    expect(
+      buildSettlementPreview("adam", [
+        ...entries,
+        {
+          id: "refund",
+          kind: "income",
+          amountMinor: 319,
+          cashMemberId: "adam",
+          shares: [
+            { memberId: "adam", amountMinor: 0 },
+            { memberId: "chelsea", amountMinor: 319 },
+          ],
+          date: "2026-01-03",
+          description: "Refund",
+        },
+      ]),
+    ).toMatchObject({ netMinor: 0, direction: "settled" });
   });
 
   it("skips voided entries before calculating debt", () => {

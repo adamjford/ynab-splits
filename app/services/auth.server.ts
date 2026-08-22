@@ -34,7 +34,12 @@ export function buildAuthorizationUrl(env: AppEnv, state: string, verifier: stri
   return url.toString();
 }
 
-export async function exchangeCode(env: AppEnv, code: string, verifier: string, fetchImpl: typeof fetch = fetch): Promise<OAuthTokenResponse> {
+export async function exchangeCode(
+  env: AppEnv,
+  code: string,
+  verifier: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<OAuthTokenResponse> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), OAUTH_TIMEOUT_MS);
   let response: Response;
@@ -42,7 +47,14 @@ export async function exchangeCode(env: AppEnv, code: string, verifier: string, 
     response = await fetchImpl(TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ client_id: env.YNAB_CLIENT_ID, client_secret: env.YNAB_CLIENT_SECRET, redirect_uri: `${env.APP_ORIGIN}/auth/ynab/callback`, grant_type: "authorization_code", code, code_verifier: verifier }),
+      body: new URLSearchParams({
+        client_id: env.YNAB_CLIENT_ID,
+        client_secret: env.YNAB_CLIENT_SECRET,
+        redirect_uri: `${env.APP_ORIGIN}/auth/ynab/callback`,
+        grant_type: "authorization_code",
+        code,
+        code_verifier: verifier,
+      }),
       signal: controller.signal,
     });
   } catch {
@@ -68,22 +80,39 @@ export async function exchangeCode(env: AppEnv, code: string, verifier: string, 
   }
 }
 
-export function persistConnection(db: AppDatabase, env: AppEnv, user: YnabUser, displayName: string, token: OAuthTokenResponse): string {
+export function persistConnection(
+  db: AppDatabase,
+  env: AppEnv,
+  user: YnabUser,
+  displayName: string,
+  token: OAuthTokenResponse,
+): string {
   const localUserId = randomUUID();
   const now = new Date().toISOString();
   const transaction = db.transaction(() => {
-    const existing = db.prepare("select id from users where ynab_user_id = ?").get(user.id) as { id: string } | undefined;
+    const existing = db.prepare("select id from users where ynab_user_id = ?").get(user.id) as
+      { id: string } | undefined;
     const userId = existing?.id ?? localUserId;
-    db.prepare(`insert into users (id, ynab_user_id, display_name) values (?, ?, ?)
-      on conflict(ynab_user_id) do nothing`).run(userId, user.id, displayName);
+    db.prepare(
+      `insert into users (id, ynab_user_id, display_name) values (?, ?, ?)
+      on conflict(ynab_user_id) do nothing`,
+    ).run(userId, user.id, displayName);
     const saved = db.prepare("select id from users where ynab_user_id = ?").get(user.id) as { id: string };
-    db.prepare(`insert into oauth_connections
+    db.prepare(
+      `insert into oauth_connections
       (id, user_id, encrypted_access_token, encrypted_refresh_token, access_expires_at, updated_at)
       values (?, ?, ?, ?, ?, ?)
       on conflict(user_id) do update set encrypted_access_token = excluded.encrypted_access_token,
       encrypted_refresh_token = excluded.encrypted_refresh_token, access_expires_at = excluded.access_expires_at,
-      disconnected_at = null, updated_at = excluded.updated_at`)
-      .run(randomUUID(), saved.id, encryptSecret(token.access_token, env.TOKEN_ENCRYPTION_KEY), encryptSecret(token.refresh_token, env.TOKEN_ENCRYPTION_KEY), new Date(Date.now() + token.expires_in * 1000).toISOString(), now);
+      disconnected_at = null, updated_at = excluded.updated_at`,
+    ).run(
+      randomUUID(),
+      saved.id,
+      encryptSecret(token.access_token, env.TOKEN_ENCRYPTION_KEY),
+      encryptSecret(token.refresh_token, env.TOKEN_ENCRYPTION_KEY),
+      new Date(Date.now() + token.expires_in * 1000).toISOString(),
+      now,
+    );
     return saved.id;
   });
   return transaction();

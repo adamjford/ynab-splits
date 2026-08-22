@@ -11,7 +11,9 @@ function resetDatabase(): void {
   const db = createDatabase(databasePath);
   try {
     db.transaction(() => {
-      db.exec("DELETE FROM ynab_postings; DELETE FROM manual_ynab_tasks; DELETE FROM ynab_transaction_decisions; DELETE FROM settlement_items; DELETE FROM settlements; DELETE FROM ledger_entries; DELETE FROM category_assignments; DELETE FROM source_accounts; DELETE FROM plan_settings; DELETE FROM invites; DELETE FROM memberships; DELETE FROM households; DELETE FROM oauth_connections; DELETE FROM users;");
+      db.exec(
+        "DELETE FROM ynab_postings; DELETE FROM manual_ynab_tasks; DELETE FROM ynab_transaction_decisions; DELETE FROM settlement_items; DELETE FROM settlements; DELETE FROM ledger_entries; DELETE FROM category_assignments; DELETE FROM source_accounts; DELETE FROM plan_settings; DELETE FROM invites; DELETE FROM memberships; DELETE FROM households; DELETE FROM oauth_connections; DELETE FROM users;",
+      );
     })();
   } finally {
     db.close();

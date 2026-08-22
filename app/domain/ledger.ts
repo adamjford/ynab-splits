@@ -1,9 +1,7 @@
 export type MemberId = string;
 
 export type SplitInput =
-  | { type: "equal" }
-  | { type: "percentage"; otherBasisPoints: number }
-  | { type: "exact"; otherAmountMinor: number };
+  { type: "equal" } | { type: "percentage"; otherBasisPoints: number } | { type: "exact"; otherAmountMinor: number };
 
 export interface MemberShare {
   memberId: MemberId;
@@ -67,7 +65,11 @@ export function allocateShares(
     }
     otherAmount = Number((BigInt(totalMinor) * BigInt(input.otherBasisPoints)) / 10_000n);
   } else {
-    if (!Number.isSafeInteger(input.otherAmountMinor) || input.otherAmountMinor < 0 || input.otherAmountMinor > totalMinor) {
+    if (
+      !Number.isSafeInteger(input.otherAmountMinor) ||
+      input.otherAmountMinor < 0 ||
+      input.otherAmountMinor > totalMinor
+    ) {
       throw new RangeError("exact share must be from zero through the total");
     }
     otherAmount = input.otherAmountMinor;

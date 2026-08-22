@@ -19,7 +19,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
     document.documentElement.dataset.hydrated = "true";
   }, []);
 
-  return <html lang="en"><head><meta charSet="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><Meta /><Links /></head><body>{children}<ScrollRestoration /><Scripts /></body></html>;
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <Meta />
+        <Links />
+      </head>
+      <body>
+        {children}
+        <ScrollRestoration />
+        <Scripts />
+      </body>
+    </html>
+  );
 }
 
 export default function App() {
@@ -28,5 +42,16 @@ export default function App() {
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   const message = isRouteErrorResponse(error) ? `${error.status} ${error.statusText}` : "Unexpected error";
-  return <main className="mx-auto max-w-3xl p-6"><h1 className="text-2xl font-semibold">{message}</h1><p className="mt-2">The request could not be completed. Return to the <Link className="underline" to="/">dashboard</Link> and try again.</p></main>;
+  return (
+    <main className="mx-auto max-w-3xl p-6">
+      <h1 className="text-2xl font-semibold">{message}</h1>
+      <p className="mt-2">
+        The request could not be completed. Return to the{" "}
+        <Link className="underline" to="/">
+          dashboard
+        </Link>{" "}
+        and try again.
+      </p>
+    </main>
+  );
 }

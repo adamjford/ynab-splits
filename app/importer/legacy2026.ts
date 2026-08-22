@@ -61,7 +61,6 @@ function isValidDate(date: string): boolean {
   return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
 }
 
-
 function headerIndex(header: string[], name: string): number {
   const index = header.findIndex((value) => normalize(value) === normalize(name));
   if (index < 0) throw new Error(`missing required header ${name}`);
@@ -105,7 +104,8 @@ export function parseLegacy2026(transactionsCsv: string, splitViewCsv: string): 
   } catch (error) {
     return emptyReport([error instanceof Error ? error.message : "invalid CSV"]);
   }
-  if (transactions.length === 0 || splitView.length < 3) return emptyReport(["both CSV files require headers and data"]);
+  if (transactions.length === 0 || splitView.length < 3)
+    return emptyReport(["both CSV files require headers and data"]);
 
   const sourceHeader = transactions[0];
   const splitHeader = splitView[2];
@@ -121,7 +121,12 @@ export function parseLegacy2026(transactionsCsv: string, splitViewCsv: string): 
     splitAmount = headerIndex(splitHeader, "Amount");
     splitPayer = headerIndex(splitHeader, "payer");
     splitCounterpartyAmount = 11;
-    if (normalize(splitHeader[splitCounterpartyAmount] ?? "") !== normalize("Paid/received by amount") || normalize(splitHeader[13] ?? "") !== "adam" || normalize(splitHeader[14] ?? "") !== "chelsea") throw new Error("Split View requires columns L, N=Adam, and O=Chelsea");
+    if (
+      normalize(splitHeader[splitCounterpartyAmount] ?? "") !== normalize("Paid/received by amount") ||
+      normalize(splitHeader[13] ?? "") !== "adam" ||
+      normalize(splitHeader[14] ?? "") !== "chelsea"
+    )
+      throw new Error("Split View requires columns L, N=Adam, and O=Chelsea");
   } catch (error) {
     return emptyReport([error instanceof Error ? error.message : "invalid headers"]);
   }
@@ -168,23 +173,37 @@ export function parseLegacy2026(transactionsCsv: string, splitViewCsv: string): 
       errors.push(`row ${sourceRow}: invalid Split View amount`);
       continue;
     }
-    if (split[splitDate] !== date || split[splitName]?.trim() !== description || Math.abs(splitAmountMinor) !== Math.abs(amountMinor) || normalize(split[splitPayer] ?? "") !== payer) {
+    if (
+      split[splitDate] !== date ||
+      split[splitName]?.trim() !== description ||
+      Math.abs(splitAmountMinor) !== Math.abs(amountMinor) ||
+      normalize(split[splitPayer] ?? "") !== payer
+    ) {
       errors.push(`row ${sourceRow}: source and Split View identity mismatch`);
       continue;
     }
     if (normalize(description) === "settle up") {
       const amount = Math.abs(amountMinor);
-      const debtorMemberKey = amountMinor < 0 ? payer === "adam" ? "chelsea" : "adam" : payer as "adam" | "chelsea";
+      const debtorMemberKey = amountMinor < 0 ? (payer === "adam" ? "chelsea" : "adam") : (payer as "adam" | "chelsea");
       const creditorMemberKey = debtorMemberKey === "adam" ? "chelsea" : "adam";
       // Keep the workbook's signed transfer. Do not replace it with the
       // calculated value when the two disagree.
       const recordedNetMinor = debtorMemberKey === "adam" ? -amount : amount;
-      const transfer: LegacyTransfer = { sourceRow, date, amountMinor: amount, debtorMemberKey, creditorMemberKey, recordedNetMinor };
+      const transfer: LegacyTransfer = {
+        sourceRow,
+        date,
+        amountMinor: amount,
+        debtorMemberKey,
+        creditorMemberKey,
+        recordedNetMinor,
+      };
       transfers.push(transfer);
       const calculatedNetMinor = -currentNet;
       periods.push({ entryKeys: currentKeys, calculatedNetMinor, transfer });
       if (calculatedNetMinor !== recordedNetMinor) {
-        errors.push(`row ${sourceRow}: calculated transfer ${calculatedNetMinor} does not match recorded transfer ${recordedNetMinor}`);
+        errors.push(
+          `row ${sourceRow}: calculated transfer ${calculatedNetMinor} does not match recorded transfer ${recordedNetMinor}`,
+        );
       }
       currentKeys = [];
       currentNet = 0;
@@ -202,7 +221,19 @@ export function parseLegacy2026(transactionsCsv: string, splitViewCsv: string): 
       continue;
     }
     const total = Math.abs(amountMinor);
-    const row: LegacyImportRow = { legacyKey: `sheet-2026:${sourceRow}`, sourceRow, kind: amountMinor >= 0 ? "expense" : "income", amountMinor: total, date, description, cashMemberKey: payer as "adam" | "chelsea", shares: payer === "adam" ? { adam: total - counterpartyMinor, chelsea: counterpartyMinor } : { adam: counterpartyMinor, chelsea: total - counterpartyMinor } };
+    const row: LegacyImportRow = {
+      legacyKey: `sheet-2026:${sourceRow}`,
+      sourceRow,
+      kind: amountMinor >= 0 ? "expense" : "income",
+      amountMinor: total,
+      date,
+      description,
+      cashMemberKey: payer as "adam" | "chelsea",
+      shares:
+        payer === "adam"
+          ? { adam: total - counterpartyMinor, chelsea: counterpartyMinor }
+          : { adam: counterpartyMinor, chelsea: total - counterpartyMinor },
+    };
     rows.push(row);
     currentKeys.push(row.legacyKey);
     currentNet += rowDebtForAdam(row);

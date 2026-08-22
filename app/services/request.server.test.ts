@@ -34,14 +34,30 @@ describe("authenticatedUser", () => {
 
     const db = createDatabase(":memory:");
     try {
-      db.prepare("insert into users (id, ynab_user_id, display_name) values (?, ?, ?)").run("pending", "ynab-pending", "Pending");
-      db.prepare("insert into users (id, ynab_user_id, display_name) values (?, ?, ?)").run("second", "ynab-second", "Second");
+      db.prepare("insert into users (id, ynab_user_id, display_name) values (?, ?, ?)").run(
+        "pending",
+        "ynab-pending",
+        "Pending",
+      );
+      db.prepare("insert into users (id, ynab_user_id, display_name) values (?, ?, ?)").run(
+        "second",
+        "ynab-second",
+        "Second",
+      );
 
       expect(() => authenticatedUser(requestFor("pending"), db)).toThrowError(expect.objectContaining({ status: 409 }));
 
       db.prepare("insert into households (id, name) values (?, ?)").run("household", "Household");
-      db.prepare("insert into memberships (household_id, user_id, member_key) values (?, ?, ?)").run("household", "pending", "adam");
-      db.prepare("insert into memberships (household_id, user_id, member_key) values (?, ?, ?)").run("household", "second", "chelsea");
+      db.prepare("insert into memberships (household_id, user_id, member_key) values (?, ?, ?)").run(
+        "household",
+        "pending",
+        "adam",
+      );
+      db.prepare("insert into memberships (household_id, user_id, member_key) values (?, ?, ?)").run(
+        "household",
+        "second",
+        "chelsea",
+      );
       expect(authenticatedUser(requestFor("pending"), db)).toEqual({
         id: "pending",
         displayName: "Pending",

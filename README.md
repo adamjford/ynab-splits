@@ -165,9 +165,14 @@ pnpm import:2026 -- --environment production \
 
 Use representative copies first. The importer preserves recorded workbook shares and transfer values; it must not invent an adjustment for a signed mismatch. A rerun of an unchanged import is expected to be idempotent. CSV exports and handoff artifacts are user data and must remain outside Git.
 
+Prettier owns formatting for JavaScript, TypeScript, TSX, CSS, JSON, and YAML
+files. Run `pnpm format` to format them locally; `pnpm format:check` verifies
+the committed formatting and runs as part of `pnpm verify`.
+
 ## Quality checks
 
 ```bash
+pnpm format:check
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -176,7 +181,7 @@ pnpm build
 pnpm test:e2e
 ```
 
-`pnpm test:e2e` uses `playwright.config.ts` and is intended for a local fake OAuth/YNAB service or a test-only server, never real YNAB credentials or a real household database. The push/pull-request workflow installs Chromium when browser tests are present and runs lint, typecheck, coverage, and the production build with frozen pnpm dependencies.
+`pnpm test:e2e` uses `playwright.config.ts` and is intended for a local fake OAuth/YNAB service or a test-only server, never real YNAB credentials or a real household database. The push/pull-request workflow installs Chromium when browser tests are present and runs the formatting check, lint, typecheck, coverage, and production build with frozen pnpm dependencies.
 
 For a production smoke check, build and run against a temporary database and test-only credentials:
 

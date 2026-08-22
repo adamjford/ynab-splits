@@ -69,8 +69,10 @@ export function QuickNavigation(): React.JSX.Element {
   const normalizedQuery = query.trim().toLowerCase();
   const visibleDestinations = APP_DESTINATIONS.filter((destination) => {
     if (!normalizedQuery) return true;
-    return destination.label.toLowerCase().includes(normalizedQuery)
-      || destination.keywords.some((value) => value.toLowerCase().includes(normalizedQuery));
+    return (
+      destination.label.toLowerCase().includes(normalizedQuery) ||
+      destination.keywords.some((value) => value.toLowerCase().includes(normalizedQuery))
+    );
   });
 
   const focusResult = (index: number) => {
@@ -132,48 +134,72 @@ export function QuickNavigation(): React.JSX.Element {
     dismiss();
   };
 
-  return <>
-    <button className="inline-flex min-h-11 items-center rounded border px-3 py-2" type="button" onClick={openPalette}>Navigate</button>
-    <dialog
-      ref={dialogRef}
-      aria-labelledby="quick-navigation-title"
-      className="quick-navigation-dialog rounded-lg p-0 shadow-xl"
-      onCancel={handleCancel}
-    >
-      <div className="w-full max-w-lg p-5">
-        <div className="flex items-center justify-between gap-4">
-          <h2 id="quick-navigation-title" className="text-lg font-semibold">Navigate</h2>
-          <button className="inline-flex min-h-11 items-center rounded border px-3 py-2" type="button" onClick={() => dismiss()}>Close</button>
+  return (
+    <>
+      <button
+        className="inline-flex min-h-11 items-center rounded border px-3 py-2"
+        type="button"
+        onClick={openPalette}
+      >
+        Navigate
+      </button>
+      <dialog
+        ref={dialogRef}
+        aria-labelledby="quick-navigation-title"
+        className="quick-navigation-dialog rounded-lg p-0 shadow-xl"
+        onCancel={handleCancel}
+      >
+        <div className="w-full max-w-lg p-5">
+          <div className="flex items-center justify-between gap-4">
+            <h2 id="quick-navigation-title" className="text-lg font-semibold">
+              Navigate
+            </h2>
+            <button
+              className="inline-flex min-h-11 items-center rounded border px-3 py-2"
+              type="button"
+              onClick={() => dismiss()}
+            >
+              Close
+            </button>
+          </div>
+          <label className="mt-4 block text-sm font-medium" htmlFor="navigation-filter">
+            Navigation filter
+          </label>
+          <input
+            ref={filterRef}
+            id="navigation-filter"
+            className="mt-1 w-full rounded border px-3 py-2"
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            onKeyDown={handleFilterKeyDown}
+            autoComplete="off"
+          />
+          <nav aria-label="Quick navigation destinations" className="mt-4 grid gap-1">
+            {visibleDestinations.map((destination, index) => {
+              const current = isDestinationCurrent(destination, pathname);
+              return (
+                <Link
+                  key={destination.to}
+                  to={destination.to}
+                  ref={(element) => {
+                    resultRefs.current[index] = element;
+                  }}
+                  aria-current={isOpen && current ? "page" : undefined}
+                  className="rounded px-3 py-2"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    activateDestination(destination);
+                  }}
+                  onKeyDown={(event) => handleResultKeyDown(event, index)}
+                >
+                  {destination.label}
+                </Link>
+              );
+            })}
+            {visibleDestinations.length === 0 ? <p role="status">No destinations found.</p> : null}
+          </nav>
         </div>
-        <label className="mt-4 block text-sm font-medium" htmlFor="navigation-filter">Navigation filter</label>
-        <input
-          ref={filterRef}
-          id="navigation-filter"
-          className="mt-1 w-full rounded border px-3 py-2"
-          value={query}
-          onChange={(event) => setQuery(event.currentTarget.value)}
-          onKeyDown={handleFilterKeyDown}
-          autoComplete="off"
-        />
-        <nav aria-label="Quick navigation destinations" className="mt-4 grid gap-1">
-          {visibleDestinations.map((destination, index) => {
-            const current = isDestinationCurrent(destination, pathname);
-            return <Link
-              key={destination.to}
-              to={destination.to}
-              ref={(element) => { resultRefs.current[index] = element; }}
-              aria-current={isOpen && current ? "page" : undefined}
-              className="rounded px-3 py-2"
-              onClick={(event) => {
-                event.preventDefault();
-                activateDestination(destination);
-              }}
-              onKeyDown={(event) => handleResultKeyDown(event, index)}
-            >{destination.label}</Link>;
-          })}
-          {visibleDestinations.length === 0 ? <p role="status">No destinations found.</p> : null}
-        </nav>
-      </div>
-    </dialog>
-  </>;
+      </dialog>
+    </>
+  );
 }

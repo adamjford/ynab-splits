@@ -18,7 +18,9 @@ export function encryptSecret(plaintext: string, secret: string): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", keyBytes(secret), iv);
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-  return [iv.toString("base64url"), ciphertext.toString("base64url"), cipher.getAuthTag().toString("base64url")].join(".");
+  return [iv.toString("base64url"), ciphertext.toString("base64url"), cipher.getAuthTag().toString("base64url")].join(
+    ".",
+  );
 }
 
 export function decryptSecret(serialized: string, secret: string): string {
